@@ -1,0 +1,589 @@
+---
+title: "Executive Function Engagement as a Slow–Fast Stochastic Dynamical System"
+author:
+  - name: Kyuri Park
+    email: k.park@uva.nl
+    affiliations:
+      - name: Computational Science Lab
+date: today
+format:
+  html:
+    code-fold: true
+    code-summary: "Show code"
+    code-link: true
+    embed-resources: true
+toc: true
+toc-depth: 3
+theme: flatly
+---
+
+# Quick Intro
+
+This document presents a stochastic differential equation (SDE) model of 
+**executive function (EF) engagement**, based on the theory that children learn 
+whether EF is *worth engaging* through experience.
+
+The model separates:
+
+- **Fast process:** moment-to-moment *propensity* to engage EF  
+- **Slow processes:** gradual learning of  
+  - expected value of EF $V(t)$  
+  - subjective cost of EF $C(t)$  
+
+
+The model reproduces four key predictions:
+
+1. Stable individual differences
+2. Developmental improvements 
+3. Transient fluctuations (stress)
+4. Intervention timing effects (early vs late)
+
+All simulations use the same underlying SDE system with different parameter manipulations.
+
+---
+
+# Model Overview
+
+## Fast Process: EF Engagement Propensity
+
+At each moment *t*, the agent computes the *propensity* to engage EF:
+
+$$
+E(t) = \sigma\left(\frac{V(t) - (C(t) + \text{extra\_cost}(t))}{\tau}\right)
+$$
+
+where:
+
+- $V(t)$: expected value of EF
+- $C(t)$: subjective cost of EF
+- $\tau$: decision temperature (higher = noisier decisions)
+- $\sigma(\cdot)$: logistic function
+
+## Slow Processes: SDE Learning Dynamics
+
+### Value dynamics
+
+When EF is engaged, it can produce a reward with probability $p_{\text{reward}}$.
+The **expected reward** at time $t$ is:
+
+$$
+R^{\text{exp}}(t) = E(t) \cdot p_{\text{reward}} \cdot \text{reward\_mag}.
+$$
+
+Value evolves according to:
+
+$$
+dV(t) = \alpha_V \big(R^{\text{exp}}(t) - V(t)\big)\,dt + \sigma_V\,dW_V(t).
+$$
+
+- $\alpha_V$: learning rate for value.  
+- $\sigma_V\,dW_V$: Gaussian noise representing random fluctuations in perceived payoff.
+
+### Cost dynamics
+
+Cost changes depending on whether EF is used:
+
+$$
+dC(t) = \{-\kappa_C + \alpha_C \left((1 - E(t))\delta_{\uparrow} - E(t)\delta_{\downarrow}\right)\}dt
+       + \sigma_C\,dW_C(t).
+$$
+
+- $\delta_{\uparrow} > 0$: how much **avoiding EF** increases cost (“it feels harder next time”).  
+- $\delta_{\downarrow} > 0$: how much **engaging EF** decreases cost (“practice makes it feel easier”).  
+- $\alpha_C$: cost learning rate.  
+- $\sigma_C\,dW_C$: random fluctuations in perceived effort.
+- $\kappa_c>0$: maturational improvement that gradually reduces EF cost with age (independent of experience).
+
+> The term - $\kappa_c$: captures normative developmental maturation that makes EF less effortful over time, ensuring a general upward developmental trend while preserving learning-driven individual differences.
+
+These coupled SDEs create slow drifts in $V$ and $C$ plus smooth noise. Combined
+with the fast decision rule for $E(t)$, they produce realistic noisy trajectories.
+
+
+These SDEs capture:
+
+- early divergence  
+- developmental growth  
+- smooth noisy fluctuations  
+- intervention sensitivity  
+
+---
+
+```{r}
+#| label: setup
+#| echo: false
+#| include: false
+
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+
+# SDE Simulation Function (Euler–Maruyama)
+
+Below is a general function that simulates the SDE for a *fixed environment*
+(constant $p_{\text{reward}}, \delta_\uparrow, \delta_\downarrow$).  
+We’ll layer environment changes (stress, interventions) on top of this later.
+
+```{r}
+
+simulate_ef_sde <- function(
+  T = 1000,        # number of discrete time steps
+  dt = 0.05,       # size of each time step
+  V0 = 0.2,        # initial expected value of EF
+  C0 = 1.0,        # initial subjective cost of EF
+  alpha_V = 0.8,   # learning rate for value (drift strength)
+  alpha_C = 0.7,   # learning rate for cost
+  delta_up = 0.2,  # how much avoiding EF raises cost
+  delta_down = 0.5,# how much using EF lowers cost
+  tau = 0.8,       # temperature of EF decision rule
+  p_reward = 0.8,  # probability that EF leads to reward when engaged
+  reward_mag = 1,  # magnitude of reward
+  sigma_V = 0.06,  # noise on value dynamics
+  sigma_C = 0.06,  # noise on cost dynamics
+  extra_cost_vec = NULL, # time-varying extra cost (e.g., stress); length T
+  seed = NULL
+){
+  if (!is.null(seed)) set.seed(seed)
+  
+  N <- T
+  if (is.null(extra_cost_vec)) extra_cost_vec <- rep(0, N)
+  
+  # Pre-allocate vectors
+  V <- numeric(N)
+  C <- numeric(N)
+  E <- numeric(N)
+  
+  # Initial states
+  V[1] <- V0
+  C[1] <- C0
+  
+  for (i in 1:(N - 1)) {
+    
+    # ----- Fast EF propensity -----
+    utility <- V[i] - (C[i] + extra_cost_vec[i])
+    E[i] <- 1 / (1 + exp(-utility / tau))
+    
+    # ----- Expected reward -----
+    R_exp <- E[i] * p_reward * reward_mag
+    
+    # ----- Deterministic drift -----
+    dV_det <- alpha_V * (R_exp - V[i])
+    dC_det <- alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
+    
+    # ----- Stochastic components -----
+    dV_sto <- sigma_V * sqrt(dt) * rnorm(1)
+    dC_sto <- sigma_C * sqrt(dt) * rnorm(1)
+    
+    # ----- Euler–Maruyama update -----
+    V[i + 1] <- V[i] + dV_det * dt + dV_sto
+    C[i + 1] <- C[i] + dC_det * dt + dC_sto
+    
+    # Optional soft bounds to keep things reasonable
+    V[i + 1] <- max(min(V[i + 1], reward_mag), 0)
+    C[i + 1] <- max(min(C[i + 1], 2), -1)
+  }
+  
+  # Last EF propensity
+  E[N] <- 1 / (1 + exp(-(V[N] - (C[N] + extra_cost_vec[N])) / tau))
+  
+  tibble(
+    t = seq(0, by = dt, length.out = N),
+    V = V,
+    C = C,
+    E = E
+  )
+}
+
+```
+
+---
+
+# Figure 1A: Stable Individual Differences
+
+Goal: show that tiny differences in early reward environment can lead to
+stable differences in EF propensity over time, even with identical learning
+parameters.
+
+
+Here we simulate 8 children. Each has:
+
+  - the same learning parameters,
+
+  - but a slightly different reward rate `p_reward`, representing small early differences in how often EF “paid off”.
+
+```{r}
+set.seed(123)
+N_agents <- 8
+
+sims_A <- lapply(1:N_agents, function(i){
+
+# Draw a slightly different reward probability for each child
+
+p_i <- 0.7 + rnorm(1, 0, 0.08)  # mean 0.7, SD 0.08
+p_i <- max(min(p_i, 0.9), 0.4)  # clamp between 0.4 and 0.9
+
+simulate_ef_sde(
+T = 500,
+dt = 0.05,
+V0 = 0.2,
+C0 = 1.0,
+alpha_V = 0.8,
+alpha_C = 0.7,
+delta_up = 0.2,
+delta_down = 0.5,
+tau = 0.8,
+p_reward = p_i,
+sigma_V = 0.06,
+sigma_C = 0.06
+) %>% mutate(child = paste0("child_", i),
+p_reward_child = round(p_i, 2))
+})
+
+df_A <- bind_rows(sims_A)
+
+ggplot(df_A, aes(t, E, color = child)) +
+geom_line(alpha = 0.9) +
+theme_minimal(base_size = 15) +
+labs(
+title = "Figure 1A. Stable Individual Differences from Tiny Environmental Variation",
+y = "EF Propensity E(t)",
+x = "Time"
+) +
+theme(legend.position = "bottom")
+
+```
+
+Tiny differences in early payoff probabilities lead to diverging EF trajectories.
+Children with slightly more rewarding early EF experiences drift into a high-EF regime, while others drift toward a low-EF regime, despite identical initial capacities.
+
+---
+
+# Figure 1B: Developmental Improvements
+
+In a high-payoff environment (frequent rewards, strong practice effects), EF propensity increases over time as value rises and cost falls.
+In a low-payoff environment, EF propensity declines because value fails to accumulate and cost increases when EF is avoided.
+
+```{r}
+sim_supportive <- simulate_ef_sde(
+T = 1000,
+dt = 0.01,
+V0 = 0.1,
+C0 = 0.8,
+alpha_V = 0.9,
+alpha_C = 0.8,
+delta_down = 0.5,   # EF practice strongly reduces cost
+delta_up = 0.05,    # avoidance only slightly increases cost
+sigma_V = 0.05,
+sigma_C = 0.05,
+p_reward = 0.9,     # EF usually rewarded
+seed = 123
+) %>% mutate(env = "Supportive")
+
+sim_unsupportive <- simulate_ef_sde(
+T = 1000,
+dt = 0.01,
+V0 = 0.1,
+C0 = 0.8,
+alpha_V = 0.9,
+alpha_C = 0.8,
+delta_down = 0.05,  # EF practice barely reduces cost
+delta_up = 0.4,     # avoidance strongly increases cost
+sigma_V = 0.05,
+sigma_C = 0.05,
+p_reward = 0.3,     # EF rarely rewarded
+seed = 123
+) %>% mutate(env = "Unsupportive")
+
+df_B <- bind_rows(sim_supportive, sim_unsupportive) %>%
+pivot_longer(cols = c(V, C, E), names_to = "var", values_to = "value")
+
+labels_dev <- c(
+V = "Expected Value V(t)",
+C = "Subjective Cost C(t)",
+E = "EF Propensity E(t)"
+)
+
+ggplot(df_B, aes(t, value, color = env)) +
+geom_line(linewidth = 0.5) +
+facet_wrap(~ var, scales = "free_y", ncol = 1,
+labeller = as_labeller(labels_dev)) +
+theme_minimal(base_size = 15) +
+labs(
+title = "Figure 1B. Supportive vs Unsupportive EF Environments",
+x = "Time",
+y = "Level"
+) +
+theme(legend.position = "bottom")
+
+
+```
+
+
+
+
+---
+
+# Figure 1C: Transient Fluctuations (Stress)
+
+We introduce a temporary stressor that adds extra cost to the EF decision rule for a finite period, while keeping all learning parameters fixed.
+
+  - Before and after stress: the environment has fixed reward and cost-learning parameters given by the default `simulate_ef_sde()` settings.
+
+  - During stress: we add an extra cost of 0.7 to the EF decision rule, making EF engagement temporarily much less attractive.
+
+```{r}
+# ----- Define a temporary stress window -----
+
+T_stress  <- 1000      # total time steps
+dt_stress <- 0.05      # time step size
+
+stress_start_idx <- 400  # index where stress begins
+stress_end_idx   <- 550  # index where stress ends
+
+# Extra cost is 0 everywhere except during the stress window
+extra_cost <- rep(0, T_stress)
+extra_cost[stress_start_idx:stress_end_idx] <- 0.7  # temporary stress spike
+
+
+# ----- Simulate EF dynamics with this extra cost term -----
+
+sim_stress <- simulate_ef_sde(
+  T = T_stress,
+  dt = dt_stress,
+  extra_cost_vec = extra_cost,  # only this differs; all other params are defaults
+  seed = 99
+)
+
+# Reshape for plotting: put V, C, E into a long format
+df_stress <- sim_stress %>%
+  tidyr::pivot_longer(
+    cols = c(V, C, E),
+    names_to = "var",
+    values_to = "value"
+  )
+
+# Nice labels for facets
+labels_stress <- c(
+  V = "Expected Value V(t)",
+  C = "Subjective Cost C(t)",
+  E = "EF Propensity E(t)"
+)
+
+# Times (in continuous units) where stress starts and ends
+stress_start_time <- stress_start_idx * dt_stress
+stress_end_time   <- stress_end_idx   * dt_stress
+
+ggplot(df_stress, aes(t, value)) +
+  geom_line() +
+  facet_wrap(
+    ~ var,
+    scales = "free_y",
+    ncol = 1,
+    labeller = as_labeller(labels_stress)
+  ) +
+  # vertical lines marking start/end of stress period
+  geom_vline(
+    xintercept = c(stress_start_time, stress_end_time),
+    linetype = "dashed"
+  ) +
+  theme_minimal(base_size = 15) +
+  labs(
+    title = "Figure 1C. Transient Stress Induces a Temporary Dip in EF Propensity",
+    x = "Time",
+    y = "Level"
+  )
+
+```
+
+
+- During the stress window (vertical dashed lines), extra cost makes EF less attractive → EF propensity E(t) drops.
+
+- Because EF is engaged less, subjective cost $C(t)$ rises and value $V(t)$ grows more slowly (or even dips).
+
+- After stress ends (extra cost returns to 0), EF propensity gradually recovers and the system returns toward its pre-stress trajectory.
+
+- This captures short-lived EF fluctuations (e.g., acute stress, fatigue) without permanently altering the underlying learning parameters.
+
+---
+
+# Figure 1D: Intervention Timing Effects
+
+Here we model an EF intervention as a temporary window in which the environment is more favorable to EF:
+
+  - within the window, EF brings higher reward and practice more strongly reduces cost;
+
+  - outside the window, we use a baseline parameterization that, given the starting cost and value, leads EF propensity to drift downward on average.
+
+We compare an early intervention window (when the system is still relatively flexible) to a late intervention window (after the system has already drifted toward lower EF).
+
+If the intervention is strong enough and occurs early, it can move the system onto a higher-EF trajectory that remains elevated even after returning to baseline; when the same window occurs late, it produces only a transient bump.
+
+```{r}
+
+# ----- SDE with a time-limited intervention window -----
+
+simulate_ef_sde_window <- function(
+  T = 3000,
+  dt = 0.02,
+  V0 = 0.2,
+  C0 = 1.0,
+  alpha_V = 0.4,  # value learning rate
+  alpha_C = 0.25, # cost learning rate
+  # Baseline environment parameters:
+  # These produce a tendency for EF propensity to drift down
+  p_reward_base = 0.5,   # probability reward if EF is engaged
+  delta_up_base = 0.3,   # how much avoiding EF raises cost
+  delta_down_base = 0.6, # how much using EF lowers cost
+  # Intervention environment parameters:
+  # Stronger payoff and practice benefit
+  p_reward_int = 0.9,
+  delta_up_int = 0.01,
+  delta_down_int = 0.9,
+  tau = 0.8,     # decision temperature
+  sigma_V = 0.1, # noise in value dynamics
+  sigma_C = 0.1, # noise in cost dynamics
+  t_start = Inf, # start index of intervention window
+  t_end   = -Inf,# end index of intervention window
+  seed = NULL
+){
+  if (!is.null(seed)) set.seed(seed)
+
+  N <- T
+  V <- numeric(N)
+  C <- numeric(N)
+  E <- numeric(N)
+
+  # Initial value and cost
+  V[1] <- V0
+  C[1] <- C0
+
+  for (i in 1:(N - 1)) {
+
+    # Are we inside the intervention window on this step?
+    in_intervention <- (i >= t_start && i <= t_end)
+
+    if (in_intervention) {
+      # During intervention: high reward, strong practice benefit, low penalty for avoidance
+      p_reward   <- p_reward_int
+      delta_up   <- delta_up_int
+      delta_down <- delta_down_int
+    } else {
+      # Outside intervention: baseline parameterization
+      p_reward   <- p_reward_base
+      delta_up   <- delta_up_base
+      delta_down <- delta_down_base
+    }
+
+    # ----- Fast EF decision -----
+    utility <- V[i] - C[i]
+    E[i] <- 1 / (1 + exp(-utility / tau))
+
+    # ----- Expected reward under current p_reward -----
+    R_exp <- E[i] * p_reward
+
+    # ----- Drift terms for value and cost -----
+    dV_det <- alpha_V * (R_exp - V[i])
+    dC_det <- alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
+
+    # ----- Stochastic terms -----
+    dV_sto <- sigma_V * sqrt(dt) * rnorm(1)
+    dC_sto <- sigma_C * sqrt(dt) * rnorm(1)
+
+    # ----- Update states -----
+    V[i + 1] <- V[i] + dV_det * dt + dV_sto
+    C[i + 1] <- C[i] + dC_det * dt + dC_sto
+
+    # Soft bounds to keep values in a reasonable range
+    V[i + 1] <- max(min(V[i + 1], 1), 0)
+    C[i + 1] <- max(min(C[i + 1], 2), -1)
+  }
+
+  # Final EF propensity
+  E[N] <- 1 / (1 + exp(-(V[N] - C[N]) / tau))
+
+  tibble(
+    step = 1:N,
+    time = (1:N) * dt,
+    V = V,
+    C = C,
+    E = E
+  )
+}
+
+# ----- Set up early vs late intervention windows -----
+
+dt <- 0.02
+T  <- 3000
+window_len <- 400   # duration of intervention in steps (~8 time units)
+
+early_start <- 200
+early_end   <- early_start + window_len
+
+late_start  <- 1800
+late_end    <- late_start + window_len
+
+# Early intervention: window starts when EF has not yet fully collapsed
+early <- simulate_ef_sde_window(
+  T = T,
+  dt = dt,
+  t_start = early_start,
+  t_end   = early_end,
+  seed = 1
+) %>%
+  mutate(condition = "Early")
+
+# Late intervention: same window, but applied after long baseline drift
+late <- simulate_ef_sde_window(
+  T = T,
+  dt = dt,
+  t_start = late_start,
+  t_end   = late_end,
+  seed = 1
+) %>%
+  mutate(condition = "Late")
+
+df_int <- bind_rows(early, late)
+
+# Data frame encoding the intervention window for each condition (for shading)
+interv_df <- tibble(
+  condition = c("Early", "Late"),
+  xmin = c(early_start,  late_start)  * dt,
+  xmax = c(early_end,    late_end)    * dt,
+  ymin = -Inf,
+  ymax =  Inf
+)
+
+ggplot(df_int, aes(time, E)) +
+  # Shaded intervention windows for each panel
+  geom_rect(
+    data = interv_df,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    inherit.aes = FALSE,
+    fill = "red",
+    alpha = 0.1
+  ) +
+  geom_line(linewidth = 0.5) +
+  facet_wrap(~ condition, ncol = 1) +
+  theme_minimal(base_size = 15) +
+  coord_cartesian(ylim = c(0, 1)) +
+  labs(
+    title = "Figure 1D. Temporary Early vs Late Intervention",
+    x = "Time",
+    y = "EF Propensity E(t)"
+  )
+
+```
+
+
+In both panels, the system starts from the same initial cost and value state and evolves under the same baseline parameters outside the intervention window. Given these initial conditions and the noise level, EF propensity drifts downward over time under the baseline.
+
+The shaded region marks a temporary intervention that briefly makes EF more rewarding and more effective at reducing cost.
+
+In the Early condition, this window arrives while the system is still relatively flexible: cost is not yet extremely high, and value has not fully collapsed. The intervention shifts the system into a more favorable cost–value region, and EF propensity remains higher afterward.
+
+In the Late condition, the same window occurs after a long period of drift toward low EF. The intervention produces a visible bump in EF propensity during the window, but once it ends, EF quickly returns to a lower level.
+
+This illustrates how the timing of a finite intervention can matter even if its content and duration are identical.
