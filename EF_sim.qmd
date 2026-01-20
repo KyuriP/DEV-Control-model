@@ -12,6 +12,8 @@ format:
     code-summary: "Show code"
     code-link: true
     embed-resources: true
+    page-layout: full
+    out-width: "100%"
 toc: true
 toc-depth: 3
 theme: flatly
@@ -63,21 +65,29 @@ where:
 
 ### Value dynamics
 
-When EF is engaged, it can produce a reward with probability $p_{\text{reward}}$.
-The **expected reward** at time $t$ is:
+When EF is engaged, it can produce a reward with probability $p_{\text{reward}}$. In the model, EF engagement at time $t$ is represented by the propensity $E(t)\in[0,1]$, which can be interpreted as the expected frequency/intensity of engaging EF at that moment. The **expected reward rate** at time $t$ is:
 
 $$
 R^{\text{exp}}(t) = E(t) \cdot p_{\text{reward}} \cdot \text{reward\_mag}.
 $$
 
-Value evolves according to:
+* $E(t)$: propensity to engage EF at time $t$ (fast allocation variable; between 0 and 1).
+* $p_{\text{reward}}$: probability of receiving a reward *conditional on EF engagement* (environmental payoff rate; between 0 and 1).
+* $\text{reward\_mag}$: magnitude of reward when it occurs (sets the reward scale; in code also sets the upper bound of $V$).
+* $R^{\text{exp}}(t)$: expected reward at time (t), i.e., the product of (engagement) × (reward probability given engagement) × (reward size).
+
+
+Value then learns toward this expected reward signal via a noisy error-correcting process:
 
 $$
 dV(t) = \alpha_V \big(R^{\text{exp}}(t) - V(t)\big)\,dt + \sigma_V\,dW_V(t).
 $$
 
-- $\alpha_V$: learning rate for value.  
-- $\sigma_V\,dW_V$: Gaussian noise representing random fluctuations in perceived payoff.
+* $V(t)$: learned expected value of engaging EF (slow state variable).
+* $\alpha_V$: value learning rate (units: per unit time; with weekly time, per week). Larger $\alpha_V$ means faster updating toward $R^{\text{exp}}(t)$.
+* $\big(R^{\text{exp}}(t) - V(t)\big)$: prediction error (how much the current expected reward differs from the learned value).
+* $dt$: time increment (in our simulations, $dt = 0.1$ weeks).
+* $\sigma_V dW_V(t)$: stochastic fluctuations in value learning, where $dW_V(t)$ is a Wiener (Brownian motion) increment with variance proportional to $dt$. $\sigma_V$ sets the noise magnitude (units: per $\sqrt{\text{time}}$; with weekly time, per $\sqrt{\text{week}}$).
 
 ### Cost dynamics
 
@@ -93,6 +103,13 @@ $$
 - $\alpha_C$: cost learning rate.  
 - $\sigma_C\,dW_C$: random fluctuations in perceived effort.
 - $\kappa_c>0$: maturational improvement that gradually reduces EF cost with age (independent of experience).
+
+* $C(t)$: subjective cost of engaging EF (slow state variable).
+* $\delta_{\uparrow} > 0$: magnitude of **avoidance-driven cost increase** (when EF is not engaged, cost tends to rise; “it feels harder next time”).
+* $\delta_{\downarrow} > 0$: magnitude of **practice-driven cost decrease** (when EF is engaged, cost tends to falll; “practice makes it feel easier”).
+* $\alpha_C$: cost learning rate (per unit time; with weekly time, per week).
+* $\kappa_C > 0$: maturational improvement that gradually reduces EF cost with age, independent of experience (a constant downward drift on $C$).
+* $\sigma_C,dW_C(t)$: stochastic fluctuations in perceived effort, with $\sigma_C$ controlling noise magnitude (per $\sqrt{\text{time}}$; per $\sqrt{\text{week}}$ under weekly time).
 
 > The term - $\kappa_c$: captures normative developmental maturation that makes EF less effortful over time, ensuring a general upward developmental trend while preserving learning-driven individual differences.
 
@@ -118,6 +135,72 @@ These SDEs capture:
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(zoo)
+
+```
+
+```{r}
+#| label: globals
+#| echo: false
+
+# ---- Time base (global) ----
+weeks_per_year <- 52
+years_total    <- 10
+H_weeks        <- years_total * weeks_per_year   # 520 weeks
+dt             <- 0.1                            # 0.1 week ~= 0.7 days
+T_total        <- round(H_weeks / dt) + 1        # 5201 steps (includes t=0)
+
+# Optional: helper to convert between step index and time
+
+idx_to_week <- function(idx) (idx - 1) * dt
+idx_to_year <- function(idx) idx_to_week(idx) / weeks_per_year
+
+# ---- Weekly-scale default parameters ----
+# Choose time constants in weeks (interpretable)
+# tau_*_weeks are time constants: smaller => faster learning; larger => slower learning.
+# Example: tau=26 means ~6-month adjustment timescale; tau=52 means ~1-year timescale.
+
+tau_V_weeks <- 26   # value learning time constant (~6 months)
+tau_C_weeks <- 26   # cost learning time constant (~6 months)
+
+default_pars <- list(
+  # ---- Time base ----
+  T  = T_total,   # number of discrete steps (set so total horizon ~10 years)
+  dt = dt,        # step size in weeks (dt = 0.1 => ~0.7 days)
+
+  # ---- Initial states ----
+  V0 = 0.2,       # initial expected value of engaging EF (in reward units, bounded [0, reward_mag])
+  C0 = 1.0,       # initial subjective cost of engaging EF (bounded approx [-1, 2])
+
+  # ---- Learning rates (per week) ----
+  # Interpretable via time constants: alpha ≈ 1 / (time constant in weeks)
+  alpha_V = 1 / tau_V_weeks,  # value learning rate (per week); e.g., tau_V_weeks=26 => ~0.038/week
+  alpha_C = 1 / tau_C_weeks,  # cost learning rate (per week); e.g., tau_C_weeks=26 => ~0.038/week
+
+  # ---- Cost learning amplitudes (dimensionless scaling of cost drift) ----
+  delta_up   = 0,  # how strongly avoiding EF increases cost ("avoidance makes it feel harder next time")
+  delta_down = 0.4,  # how strongly engaging EF decreases cost ("practice makes it feel easier")
+
+  # ---- Maturational improvement (per week) ----
+  # A constant downward drift on cost: C(t) decreases by ~kappa_C * (weeks) over development.
+  # Example: target ~0.8 cost-unit drop over 10 years (~520 weeks):
+  # kappa_C ≈ 0.8 / 520 ≈ 0.00154 per week
+  kappa_C = 0.001,  # maturational drift reducing EF cost (per week)
+
+  # ---- Fast decision policy ----
+  tau = 0.8,         # decision temperature (higher => noisier / less sensitive to value-cost differences)
+
+  # ---- Reward environment ----
+  p_reward   = 0.7,  # probability EF yields reward when engaged (environmental payoff rate)
+  reward_mag = 1,    # reward magnitude scaling (also used as V upper bound in your code)
+
+  # ---- Stochasticity (diffusion scales; per sqrt(week)) ----
+  # Noise increments are sigma * sqrt(dt) * N(0,1), so sigma has units per sqrt(week).
+  sigma_V = 0.02,    # value noise scale (per sqrt(week))
+  sigma_C = 0.02     # cost noise scale (per sqrt(week))
+)
+
+
 ```
 
 
@@ -130,73 +213,89 @@ We’ll layer environment changes (stress, interventions) on top of this later.
 ```{r}
 
 simulate_ef_sde <- function(
-  T = 1000,        # number of discrete time steps
-  dt = 0.05,       # size of each time step
-  V0 = 0.2,        # initial expected value of EF
-  C0 = 1.0,        # initial subjective cost of EF
-  alpha_V = 0.8,   # learning rate for value (drift strength)
-  alpha_C = 0.7,   # learning rate for cost
-  delta_up = 0.2,  # how much avoiding EF raises cost
-  delta_down = 0.5,# how much using EF lowers cost
-  kappa_C = 0,     # maturational drift: reduces cost over time
-  tau = 0.8,       # temperature of EF decision rule
-  p_reward = 0.8,  # probability that EF leads to reward when engaged
-  reward_mag = 1,  # magnitude of reward
-  sigma_V = 0.06,  # noise on value dynamics
-  sigma_C = 0.06,  # noise on cost dynamics
-  extra_cost_vec = NULL, # time-varying extra cost (e.g., stress); length T
+  T = T_total,        # number of steps (default: 10 years)
+  dt = dt,            # step size (weeks)
+  V0 = 0.2,           # initial expected value of EF
+  C0 = 1.0,           # initial subjective cost of EF
+  alpha_V = 1 / tau_V_weeks,  # value learning rate (per week)
+  alpha_C = 1 / tau_C_weeks,  # cost learning rate (per week)
+  delta_up = 0,     # avoiding EF increases cost
+  delta_down = 0.4,   # engaging EF decreases cost
+  kappa_C = 0.001,   # maturational drift on cost (per week)
+  tau = 0.8,          # decision temperature
+  p_reward = 0.7,     # probability EF yields reward when engaged
+  reward_mag = 1,     # reward magnitude
+  sigma_V = 0.02,     # value noise (per sqrt(week))
+  sigma_C = 0.02,     # cost noise (per sqrt(week))
+  # ---- Optional bounds ----
+  V_min = 0,              # lower bound for value
+  V_max = reward_mag,     # upper bound for value (default tied to reward_mag)
+  C_min = -2,             # lower bound for cost
+  C_max = 2,              # upper bound for cost
+  
+  extra_cost_vec = NULL, # additive cost to decision rule; length T
   seed = NULL
 ){
   if (!is.null(seed)) set.seed(seed)
   
+  # bound sanity checks
+  stopifnot(V_min < V_max, C_min < C_max)
+  stopifnot(V0 >= V_min, V0 <= V_max, C0 >= C_min, C0 <= C_max)
+  
   N <- T
   if (is.null(extra_cost_vec)) extra_cost_vec <- rep(0, N)
-  
-  # Pre-allocate vectors
+  stopifnot(length(extra_cost_vec) == N)
+
   V <- numeric(N)
   C <- numeric(N)
   E <- numeric(N)
-  
-  # Initial states
+
   V[1] <- V0
   C[1] <- C0
-  
+
   for (i in 1:(N - 1)) {
-    
-    # ----- Fast EF propensity -----
+
+    # Fast EF propensity (allocation)
     utility <- V[i] - (C[i] + extra_cost_vec[i])
     E[i] <- 1 / (1 + exp(-utility / tau))
-    
-    # ----- Expected reward -----
+
+    # Expected reward from EF engagement
     R_exp <- E[i] * p_reward * reward_mag
-    
-    # ----- Deterministic drift -----
+
+    # Drift terms
     dV_det <- alpha_V * (R_exp - V[i])
+    # With delta_up = 0, not engaging EF does not increase cost; it only removes practice-driven cost reduction.
+    dC_det <- (-kappa_C) + alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
+
     dC_det <- (-kappa_C) + alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
     
-    # ----- Stochastic components -----
+    # Diffusion terms
     dV_sto <- sigma_V * sqrt(dt) * rnorm(1)
     dC_sto <- sigma_C * sqrt(dt) * rnorm(1)
     
-    # ----- Euler–Maruyama update -----
+    # Euler–Maruyama update
     V[i + 1] <- V[i] + dV_det * dt + dV_sto
     C[i + 1] <- C[i] + dC_det * dt + dC_sto
     
-    # Optional soft bounds to keep things reasonable
-    V[i + 1] <- max(min(V[i + 1], reward_mag), 0)
-    C[i + 1] <- max(min(C[i + 1], 2), -1)
+    # Soft bounds
+    V[i + 1] <- max(min(V[i + 1], V_max), V_min)
+    C[i + 1] <- max(min(C[i + 1], C_max), C_min)
+    
+    
   }
   
-  # Last EF propensity
+  # Final EF propensity
   E[N] <- 1 / (1 + exp(-(V[N] - (C[N] + extra_cost_vec[N])) / tau))
   
   tibble(
-    t = seq(0, by = dt, length.out = N),
+    t = seq(0, by = dt, length.out = N),  # weeks
+    year = t / weeks_per_year,            # years (for plotting convenience)
     V = V,
     C = C,
     E = E
   )
 }
+
 
 ```
 
@@ -216,50 +315,74 @@ Here we simulate 8 children. Each has:
   - but a slightly different reward rate `p_reward`, representing small early differences in how often EF “paid off”.
 
 ```{r}
-set.seed(123)
-N_agents <- 8
+#| fig-width: 10
+#| fig-height: 5
+#| fig-align: "center"
+#| 
+set.seed(123)   # reproducibility: fixes the random draws for payoff rates across runs
+N_agents <- 8   # number of simulated children (agents)
 
+# ------------------------------------------------------------
+# Child-specific parameters (stable between-child differences)
+# ------------------------------------------------------------
+child_pars <- tibble(
+  child = paste0("child_", 1:N_agents),
+
+  # Between-child variation in environmental payoff rate for engaging EF:
+  # p_reward_child = P(reward | EF engaged).
+  # Here we draw around 0.5 with a large SD (=1) and clamp into [0.1, 0.95].
+  # (For a "tiny variation" story, reduce SD to ~0.08–0.15 and clamp to ~[0.4, 0.9].)
+  p_reward_child = pmin(pmax(0.5 + rnorm(N_agents, 0, 1), 0.1), 0.95)
+) %>%
+  mutate(
+    # Human-readable label for plotting/legend (rounded)
+    p_reward_label = sprintf("p=%.2f", p_reward_child)
+  )
+
+# ------------------------------------------------------------
+# Simulate each child
+# ------------------------------------------------------------
 sims_A <- lapply(1:N_agents, function(i){
 
-# Draw a slightly different reward probability for each child
+  # Build argument list for this child by starting from global defaults
+  # and overriding only what differs for this child.
+  args_i <- modifyList(default_pars, list(
+    p_reward = child_pars$p_reward_child[i],  # child-specific payoff environment
+    seed = i * 456                            # child-specific stochastic trajectory (unique noise realization)
+  ))
 
-p_i <- 0.7 + rnorm(1, 0, 0.08)  # mean 0.7, SD 0.08
-p_i <- max(min(p_i, 0.9), 0.4)  # clamp between 0.4 and 0.9
+  # Run the SDE simulator with this child's parameters
+  sim_i <- do.call(simulate_ef_sde, args_i)
 
-simulate_ef_sde(
-T = 500,
-dt = 0.05,
-V0 = 0.2,
-C0 = 1.0,
-alpha_V = 0.8,
-alpha_C = 0.7,
-delta_up = 0.2,
-delta_down = 0.5,
-kappa_C = 0,   # maturational drift: reduces cost over time
-tau = 0.8,
-p_reward = p_i,
-sigma_V = 0.06,
-sigma_C = 0.06
-) %>% mutate(child = paste0("child_", i),
-p_reward_child = round(p_i, 2))
+  # Attach identifiers + payoff-rate metadata to every timepoint for plotting
+  sim_i %>%
+    mutate(child = child_pars$child[i]) %>%
+    left_join(child_pars, by = "child")
 })
 
+# Stack all children into one long dataframe
 df_A <- bind_rows(sims_A)
 
-ggplot(df_A, aes(t, E, color = child)) +
-geom_line(alpha = 0.9) +
-theme_minimal(base_size = 15) +
-labs(
-title = "Figure 1A. Stable Individual Differences from Tiny Environmental Variation",
-y = "EF Propensity E(t)",
-x = "Time"
-) +
-theme(legend.position = "bottom")
+# ------------------------------------------------------------
+# Plot: EF propensity trajectories
+# ------------------------------------------------------------
+ggplot(df_A, aes(year, E, color = child, group = child)) +
+  geom_line(alpha = 0.9) +
+  theme_minimal(base_size = 15) +
+  labs(
+    title = "Figure 1A. Stable Individual Differences from Environmental Variation",
+    y = "EF Propensity E(t)",
+    x = "Time (years)",
+    color = "Child"   # note: color is mapped to child here (not payoff rate)
+  ) +
+  theme(legend.position = "bottom")
+
 
 ```
 
 Tiny differences in early payoff probabilities lead to diverging EF trajectories.
 Children with slightly more rewarding early EF experiences drift into a high-EF regime, while others drift toward a low-EF regime, despite identical initial capacities.
+
 
 ---
 
@@ -269,58 +392,95 @@ In a high-payoff environment (frequent rewards, strong practice effects), EF pro
 In a low-payoff environment, EF propensity declines because value fails to accumulate and cost increases when EF is avoided.
 
 ```{r}
-sim_supportive <- simulate_ef_sde(
-T = 1000,
-dt = 0.01,
-V0 = 0.1,
-C0 = 0.8,
-alpha_V = 0.9,
-alpha_C = 0.8,
-delta_down = 0.5,   # EF practice strongly reduces cost
-delta_up = 0.05,    # avoidance only slightly increases cost
-kappa_C = 0,   # maturational drift: reduces cost over time
-sigma_V = 0.05,
-sigma_C = 0.05,
-p_reward = 0.9,     # EF usually rewarded
-seed = 123
-) %>% mutate(env = "Supportive")
+#| fig-width: 10
+#| fig-height: 8
+#| fig-align: "center"
+#| 
+# Figure 1B: Developmental Improvements (weekly time base; 10-year horizon)
 
-sim_unsupportive <- simulate_ef_sde(
-T = 1000,
-dt = 0.01,
-V0 = 0.1,
-C0 = 0.8,
-alpha_V = 0.9,
-alpha_C = 0.8,
-delta_down = 0.05,  # EF practice barely reduces cost
-delta_up = 0.4,     # avoidance strongly increases cost
-kappa_C = 0,   # maturational drift: reduces cost over time
-sigma_V = 0.05,
-sigma_C = 0.05,
-p_reward = 0.3,     # EF rarely rewarded
-seed = 123
-) %>% mutate(env = "Unsupportive")
+# --- Supportive environment ---
+# High payoff + strong practice effect (engaging EF reduces cost efficiently)
+args_supportive <- modifyList(default_pars, list(
+  V0 = 0.1,
+  C0 = 0.8,
+  p_reward   = 0.9,
+  delta_up   = 0.0,   # Yuko: drop avoidance -> cost increase
+  delta_down = 0.35,   # strong practice-driven cost reduction
+  seed = 123
+))
 
-df_B <- bind_rows(sim_supportive, sim_unsupportive) %>%
-pivot_longer(cols = c(V, C, E), names_to = "var", values_to = "value")
+# --- Unsupportive environment ---
+# Low payoff + weak practice effect (EF yields little value; practice helps less)
+args_unsupportive <- modifyList(default_pars, list(
+  V0 = 0.1,
+  C0 = 0.8,
+  p_reward   = 0.3,
+  delta_up   = 0.0,   # Yuko: drop avoidance -> cost increase
+  delta_down = 0.05,  # weak practice-driven cost reduction
+  seed = 12345
+))
+
+
+sim_supportive   <- do.call(simulate_ef_sde, args_supportive)   %>% mutate(env = "Supportive")
+sim_unsupportive <- do.call(simulate_ef_sde, args_unsupportive) %>% mutate(env = "Unsupportive")
+
+
+
+# ---- Construct a developmental EF index that is non-decreasing ----
+# Step 1: smooth E(t) over a long window (developmental timescale)
+# Step 2: take cummax to enforce monotonic developmental gains
+
+smooth_weeks <- 13                 # e.g., 13-week (~3 month) smoothing window
+k_steps <- round(smooth_weeks / dt)  # dt is in weeks (global); dt=0.1 => k_steps ~ 130
+
+make_E_dev <- function(df, k = k_steps){
+  df %>%
+    arrange(year) %>%
+    mutate(
+      # rolling mean; align="right" makes it a "past-looking" developmental average
+      E_smooth = zoo::rollmean(E, k = k, fill = NA, align = "right"),
+      # replace early NAs with raw E so cummax starts cleanly
+      E_smooth = ifelse(is.na(E_smooth), E, E_smooth),
+      # monotone developmental EF
+      E_dev = cummax(E_smooth)
+    )
+}
+
+
+
+# --- Compute E_dev for each condition (wide data) ---
+sim_supportive_dev   <- sim_supportive   %>% make_E_dev()
+sim_unsupportive_dev <- sim_unsupportive %>% make_E_dev()
+
+# Combine (still wide: has V, C, E, E_smooth, E_dev)
+df_B_dev <- bind_rows(sim_supportive_dev, sim_unsupportive_dev)
+
+# --- Long format for plotting: V (top), C (middle), E_dev (bottom) ---
+df_B_long <- df_B_dev %>%
+  select(year, env, V, C, E_dev) %>%
+  pivot_longer(cols = c(V, C, E_dev), names_to = "var", values_to = "value") %>%
+  mutate(
+    var = factor(var, levels = c("V", "C", "E_dev"))  # facet order: top->bottom
+  )
 
 labels_dev <- c(
-V = "Expected Value V(t)",
-C = "Subjective Cost C(t)",
-E = "EF Propensity E(t)"
+  V = "Expected Value V(t)",
+  C = "Subjective Cost C(t)",
+  E_dev = "Developmental EF  E_dev(t) (13-week smooth + cumulative max)"
 )
 
-ggplot(df_B, aes(t, value, color = env)) +
-geom_line(linewidth = 0.5) +
-facet_wrap(~ var, scales = "free_y", ncol = 1,
-labeller = as_labeller(labels_dev)) +
-theme_minimal(base_size = 15) +
-labs(
-title = "Figure 1B. Supportive vs Unsupportive EF Environments",
-x = "Time",
-y = "Level"
-) +
-theme(legend.position = "bottom")
+ggplot(df_B_long, aes(year, value, color = env, group = env)) +
+  geom_line(linewidth = 0.6) +
+  facet_wrap(~ var, scales = "free_y", ncol = 1,
+             labeller = as_labeller(labels_dev)) +
+  theme_minimal(base_size = 15) +
+  labs(
+    title = "Figure 1B. Supportive vs Unsupportive EF Environments",
+    x = "Time (years)",
+    y = "Level"
+  ) +
+  theme(legend.position = "bottom")
+
 
 
 ```
@@ -332,263 +492,463 @@ theme(legend.position = "bottom")
 
 # Figure 1C: Transient Fluctuations (Stress)
 
-We introduce a temporary stressor that adds extra cost to the EF decision rule for a finite period, while keeping all learning parameters fixed.
+We model acute stress as a temporary, additive cost applied to the fast EF engagement decision. Stress enters only through the decision utility (via `extra_cost`), and does not change the slow learning dynamics for value $V(t)$ or subjective cost $C(t)$. As a result, the stress effect is designed to be transient: during the stress window, EF engagement drops because the instantaneous utility of engaging EF is reduced; once the stressor ends, EF engagement rebounds as the system returns to its baseline decision dynamics.
 
-  - Before and after stress: the environment has fixed reward and cost-learning parameters given by the default `simulate_ef_sde()` settings.
+This figure therefore plots the instantaneous EF propensity $E(t)$ (rather than $E_{dev}$), because the purpose is to visualize short-run within-person fluctuations rather than long-run developmental change.
 
-  - During stress: we add an extra cost of 0.7 to the EF decision rule, making EF engagement temporarily much less attractive.
+Concretely:
+
+- Outside the stress window: the model runs with the baseline parameters (default reward environment and learning rates).
+
+- During the stress window: we add a positive `extra_cost` term to the decision rule, making EF engagement temporarily less attractive and producing a dip in $E(t)$.
+
 
 ```{r}
-# ----- Define a temporary stress window -----
+#| fig-width: 11
+#| fig-height: 8
+#| fig-align: "center"
 
-T_stress  <- 1000      # total time steps
-dt_stress <- 0.05      # time step size
+# Figure 1C: Transient fluctuations (stress) on the same 10-year weekly time base
+# Stress is modeled as a temporary increase in "extra_cost" in the fast decision rule:
+#   utility = V - (C + extra_cost)
+# so extra_cost lowers E(t) immediately during the window, without directly changing the V/C drifts.
 
-stress_start_idx <- 400  # index where stress begins
-stress_end_idx   <- 550  # index where stress ends
+# -------------------------
+# 1) Time horizon and stress schedule
+# -------------------------
 
-# Extra cost is 0 everywhere except during the stress window
+# Use the same horizon as the global defaults (10 years at dt = 0.1 week)
+T_stress <- default_pars$T
+
+# Initialize extra_cost vector; must match length T_stress exactly (your simulate_ef_sde checks this)
 extra_cost <- rep(0, T_stress)
-extra_cost[stress_start_idx:stress_end_idx] <- 0.7  # temporary stress spike
 
+# Define stress window in YEARS (x-axis units)
+stress_start_year <- 3.0
+stress_end_year   <- 4.0   # NOTE: this is ~1 year, not 13 weeks
 
-# ----- Simulate EF dynamics with this extra cost term -----
+# Convert years -> index in the discrete simulation grid
+# dt is in WEEKS, so:
+#   years * 52 = weeks
+#   weeks / dt = number of steps
+# +1 aligns with t=0 being index 1
+stress_start_idx <- round(stress_start_year * weeks_per_year / dt) + 1
+stress_end_idx   <- round(stress_end_year   * weeks_per_year / dt) + 1
 
-sim_stress <- simulate_ef_sde(
-  T = T_stress,
-  dt = dt_stress,
-  extra_cost_vec = extra_cost,  # only this differs; all other params are defaults
+# Safety clamp to keep indices valid
+stress_start_idx <- max(1, min(T_stress, stress_start_idx))
+stress_end_idx   <- max(1, min(T_stress, stress_end_idx))
+
+# Ensure ordering (in case user accidentally reversed years)
+if (stress_end_idx < stress_start_idx) {
+  tmp <- stress_start_idx
+  stress_start_idx <- stress_end_idx
+  stress_end_idx <- tmp
+}
+
+# Apply stress: add a constant extra cost during the stress window.
+# Interpretation: acute/chronic stress makes EF feel more costly right now,
+# reducing the probability of engaging EF at each moment.
+extra_cost[stress_start_idx:stress_end_idx] <- 0.5  # try 0.3–1.2 depending on desired effect size
+
+# -------------------------
+# 2) Run simulation under stress
+# -------------------------
+
+# Build argument list: start from default parameters and override only extra_cost and RNG seed
+args_stress <- modifyList(default_pars, list(
+  extra_cost_vec = extra_cost,
   seed = 99
-)
+))
 
-# Reshape for plotting: put V, C, E into a long format
-df_stress <- sim_stress %>%
-  tidyr::pivot_longer(
-    cols = c(V, C, E),
-    names_to = "var",
-    values_to = "value"
+# Run the model
+sim_stress <- do.call(simulate_ef_sde, args_stress)
+
+# -------------------------
+# 3) Construct a "developmental EF" readout (optional)
+# -------------------------
+# E_dev is a *derived* metric:
+#   (i) smooth E(t) over a developmental window (here ~13 weeks)
+#   (ii) enforce monotonicity via cummax
+# This ensures E_dev never dips; stress can only slow/delay its increase.
+
+smooth_weeks <- 13                    # developmental smoothing window (~3 months)
+k_steps <- round(smooth_weeks / dt)   # dt is in weeks; dt=0.1 => k_steps ~ 130
+
+sim_stress2 <- sim_stress %>%
+  arrange(year) %>%                  # ensure time-ordering
+  mutate(
+    # Rolling mean of E over the past k steps
+    # align="right" makes it "past-looking" (uses history up to current time)
+    E_smooth = zoo::rollmean(E, k = k_steps, fill = NA, align = "right"),
+
+    # Fill early NA values (first k-1 points) with raw E so we can start cummax cleanly
+    E_smooth = ifelse(is.na(E_smooth), E, E_smooth),
+
+    # Monotone developmental EF index
+    E_dev = cummax(E_smooth)
   )
 
-# Nice labels for facets
+# -------------------------
+# 4) Plot: V (top), C (middle), E (bottom), and E_dev (optional extra panel)
+# -------------------------
+
+df_stress_long <- sim_stress2 %>%
+  select(year, V, C, E, E_dev) %>%
+  pivot_longer(cols = c(V, C, E, E_dev),
+               names_to = "var",
+               values_to = "value") %>%
+  mutate(
+    # Set facet order explicitly
+    var = factor(var, levels = c("V", "C", "E", "E_dev"))
+  )
+
 labels_stress <- c(
   V = "Expected Value V(t)",
   C = "Subjective Cost C(t)",
-  E = "EF Propensity E(t)"
+  E = "Instantaneous EF Propensity E(t)",
+  E_dev = "Developmental EF E_dev(t) (13-week smooth + cummax)"
 )
 
-# Times (in continuous units) where stress starts and ends
-stress_start_time <- stress_start_idx * dt_stress
-stress_end_time   <- stress_end_idx   * dt_stress
-
-ggplot(df_stress, aes(t, value)) +
-  geom_line() +
-  facet_wrap(
-    ~ var,
-    scales = "free_y",
-    ncol = 1,
-    labeller = as_labeller(labels_stress)
-  ) +
-  # vertical lines marking start/end of stress period
-  geom_vline(
-    xintercept = c(stress_start_time, stress_end_time),
-    linetype = "dashed"
-  ) +
+ggplot(df_stress_long, aes(year, value)) +
+  geom_line(linewidth = 0.6) +
+  facet_wrap(~ var, scales = "free_y", ncol = 1,
+             labeller = as_labeller(labels_stress)) +
+  # Mark start/end of stress window (in years)
+  geom_vline(xintercept = c(stress_start_year, stress_end_year),
+             linetype = "dashed") +
   theme_minimal(base_size = 15) +
   labs(
-    title = "Figure 1C. Transient Stress Induces a Temporary Dip in EF Propensity",
-    x = "Time",
+    title = "Figure 1C. Transient Stress Suppresses Engagement and Can Delay Developmental Gains",
+    x = "Time (years)",
     y = "Level"
   )
+
 
 ```
 
 
-- During the stress window (vertical dashed lines), extra cost makes EF less attractive → EF propensity E(t) drops.
+* **During the stress window** (vertical dashed lines), the model adds an `extra_cost` term to the *decision rule* for EF. This lowers the instantaneous control utility $V(t) - (C(t)+\text{extra\_cost}(t))$, producing a clear **temporary drop in instantaneous EF propensity** $E(t)$.
 
-- Because EF is engaged less, subjective cost $C(t)$ rises and value $V(t)$ grows more slowly (or even dips).
+* **Value and cost change only weakly during stress** in this implementation because stress does *not* enter the learning rules directly: it affects $V(t)$ and $C(t)$ only *indirectly* through any reduction in engagement (i.e., smaller expected reward $R^{exp}(t)$ and fewer practice-driven cost reductions). Over a relatively short window, those slow dynamics may show only subtle deviations.
 
-- After stress ends (extra cost returns to 0), EF propensity gradually recovers and the system returns toward its pre-stress trajectory.
+* **After stress ends**, the `extra_cost` term returns to zero, so the instantaneous decision utility rebounds immediately and $E(t)$ **recovers toward its prior trajectory**, with $V(t)$ and $C(t)$ continuing to evolve under the same baseline learning dynamics.
 
-- This captures short-lived EF fluctuations (e.g., acute stress, fatigue) without permanently altering the underlying learning parameters.
+* The **developmental EF index** $E_{\text{dev}}(t)$ (smoothed + monotone) shows the stress episode as a **temporary plateau or delay in developmental gains** rather than a decline: while stress suppresses engagement, $E_{\text{dev}}(t)$ stops increasing for a period, then resumes growth once engagement recovers.
+
+* Overall, the figure illustrates how an acute stressor can generate **short-lived dips in momentary EF engagement** while producing at most a **modest developmental delay**—without changing the underlying parameters governing learning.
+
 
 ---
-
 # Figure 1D: Intervention Timing Effects
 
-Here we model an EF intervention as a temporary window in which the environment is more favorable to EF:
+We model an EF intervention as a **time-limited increase in the payoff for engaging EF**, implemented as a temporary rise in the reward probability $p_{\text{reward}}(t)$. This intervention targets the *value-of-control* pathway: by making EF engagement more likely to pay off during the window, it increases the reward signal that drives learning in (V(t)). This design directly addresses Yuko’s plausibility concern by manipulating **rewards for EF** rather than imposing an ad hoc cost change.
 
-  - within the window, EF brings higher reward and practice more strongly reduces cost;
+Key modeling choices:
 
-  - outside the window, we use a baseline parameterization that, given the starting cost and value, leads EF propensity to drift downward on average.
+* **Intervention manipulation (reward-only):** during the intervention window, $p_{\text{reward}}(t)$ is elevated. This increases the expected reward rate $R^{\text{exp}}(t)=E(t)p_{\text{reward}}(t)\text{reward\_mag}$, which in turn pushes $V(t)$ upward through the same value-learning dynamics used elsewhere in the model.
+* **No avoidance penalty:** we set $\delta_{\uparrow}=0$, so *not* engaging EF does **not** make EF more costly later. In this formulation, avoidance removes practice opportunities but does not introduce a separate “avoidance makes EF harder” process.
+* **Practice mechanism present but not manipulated:** engaging EF can still reduce subjective cost via $\delta_{\downarrow}$, but $\delta_{\downarrow}$ is held fixed across conditions and is **not** part of the intervention.
 
-We compare an early intervention window (when the system is still relatively flexible) to a late intervention window (after the system has already drifted toward lower EF).
+We compare two conditions that are identical except for **when** the payoff boost occurs:
 
-If the intervention is strong enough and occurs early, it can move the system onto a higher-EF trajectory that remains elevated even after returning to baseline; when the same window occurs late, it produces only a transient bump.
+* **Early intervention:** the reward boost occurs earlier in development.
+* **Late intervention:** the same reward boost occurs later.
+
+For interpretability, the two trajectories are generated under the same baseline parameters and (when desired) the **same random seed**, so that differences can be attributed to the timing of the payoff schedule rather than different noise realizations.
+
 
 ```{r}
+#| fig-width: 9
+#| fig-height: 8
+#| fig-align: "center"
+#| 
+# ============================================================
+# FIGURE 1D: Timing effects of a REWARD-based EF intervention
+#   - Intervention manipulates rewards only: p_reward(t)
+#   - Yuko-consistent: delta_up = 0 (no avoidance penalty)
+#   - delta_down fixed across all conditions (practice exists, not manipulated)
+#
+# To get persistent timing divergence, we add:
+#   (A) Critical-period plasticity: learning drops after age_cut_years
+#   (B) Consolidation state H(t): thresholded growth + decay (path dependence)
+#   (C) Realized rewards (stochastic), not only expected reward
+# ============================================================
 
-# ----- SDE with a time-limited intervention window -----
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(zoo)
 
-simulate_ef_sde_window <- function(
-  T = 3000,
-  dt = 0.02,
-  V0 = 0.2,
-  C0 = 1.0,
-  alpha_V = 0.4,  # value learning rate
-  alpha_C = 0.25, # cost learning rate
-  # Baseline environment parameters:
-  # These produce a tendency for EF propensity to drift down
-  p_reward_base = 0.5,   # probability reward if EF is engaged
-  delta_up_base = 0.3,   # how much avoiding EF raises cost
-  delta_down_base = 0.6, # how much using EF lowers cost
-  kappa_C = 0,   # maturational drift: reduces cost over time
-  # Intervention environment parameters:
-  # Stronger payoff and practice benefit
-  p_reward_int = 0.9,
-  delta_up_int = 0.01,
-  delta_down_int = 0.9,
-  tau = 0.8,     # decision temperature
-  sigma_V = 0.1, # noise in value dynamics
-  sigma_C = 0.1, # noise in cost dynamics
-  t_start = Inf, # start index of intervention window
-  t_end   = -Inf,# end index of intervention window
+# ----------------------------
+# 0) Assumes these exist from earlier sections
+# ----------------------------
+# default_pars must include: T, dt, alpha_V, alpha_C, tau, reward_mag, sigma_V, sigma_C, p_reward
+# dt is in weeks, weeks_per_year exists
+# Example:
+#   weeks_per_year <- 52
+#   dt <- default_pars$dt
+
+# ----------------------------
+# 1) Helper: 13-week rolling mean for plotting
+# ----------------------------
+smooth_weeks <- 13
+k_steps <- round(smooth_weeks / dt)
+
+add_E_smooth <- function(df){
+  df %>%
+    arrange(year) %>%
+    mutate(
+      E_smooth = zoo::rollmean(E, k = k_steps, fill = NA, align = "right"),
+      E_smooth = ifelse(is.na(E_smooth), E, E_smooth)
+    )
+}
+
+# Year -> index on grid
+to_idx <- function(y) round(y * weeks_per_year / dt) + 1
+clamp_idx <- function(x) max(1, min(default_pars$T, x))
+
+# ----------------------------
+# 2) Critical-period plasticity schedule
+# ----------------------------
+# We implement a sharp drop after age_cut_years.
+# This is what makes "early" persistently different on average.
+make_alpha_critical <- function(T, dt, weeks_per_year, alpha0,
+                                age_cut_years = 3.0,
+                                post_mult = 0.03){
+  t_weeks <- seq(0, by = dt, length.out = T)
+  t_years <- t_weeks / weeks_per_year
+  alpha0 * ifelse(t_years <= age_cut_years, 1.0, post_mult)
+}
+
+# ----------------------------
+# 3) Simulator: reward schedule + critical plasticity + consolidation H(t)
+# ----------------------------
+simulate_ef_sde_reward_only_divergent <- function(
+  T  = default_pars$T,
+  dt = default_pars$dt,
+
+  # Initial states
+  V0 = 0.05,
+  C0 = 1.80,
+  H0 = 0.00,
+
+  # Baseline learning-rate scales (pre-cut)
+  alpha_V0 = default_pars$alpha_V,
+  alpha_C0 = default_pars$alpha_C,
+  alpha_H0 = 0.35,
+
+  # Critical period settings
+  age_cut_years = 3.0,
+  post_mult_V = 0.03,
+  post_mult_C = 0.03,
+  post_mult_H = 0.03,
+
+  # Cost dynamics (Yuko-consistent)
+  delta_up   = 0.0,
+  delta_down = 0.18,
+  kappa_C    = 0.0,
+
+  # Decision
+  tau = 0.30,     # smaller => more nonlinear / threshold-ish decision
+  w_H = 5.0,      # how much consolidation supports EF utility
+
+  # Consolidation dynamics (threshold + decay)
+  theta_H = 0.40, # habit builds only when E is fairly high
+  gamma_H = 0.25, # habit decays otherwise
+
+  # Reward & noise
+  reward_mag = default_pars$reward_mag,
+  sigma_V = default_pars$sigma_V,
+  sigma_C = default_pars$sigma_C,
+  sigma_H = 0.00,
+
+  # Time-varying schedules (reward-only intervention)
+  p_reward_vec = NULL,
+  extra_cost_vec = NULL,
+
+  # Bounds
+  V_min = 0,  V_max = reward_mag,
+  C_min = 0.0, C_max = 2.0,
+  H_min = 0.0, H_max = 1.0,
+
   seed = NULL
 ){
   if (!is.null(seed)) set.seed(seed)
 
-  N <- T
-  V <- numeric(N)
-  C <- numeric(N)
-  E <- numeric(N)
+  if (is.null(p_reward_vec))   p_reward_vec <- rep(default_pars$p_reward, T)
+  if (is.null(extra_cost_vec)) extra_cost_vec <- rep(0, T)
+  stopifnot(length(p_reward_vec) == T, length(extra_cost_vec) == T)
 
-  # Initial value and cost
-  V[1] <- V0
-  C[1] <- C0
+  # Critical-period learning schedules
+  alpha_V_vec <- make_alpha_critical(T, dt, weeks_per_year, alpha_V0, age_cut_years, post_mult_V)
+  alpha_C_vec <- make_alpha_critical(T, dt, weeks_per_year, alpha_C0, age_cut_years, post_mult_C)
+  alpha_H_vec <- make_alpha_critical(T, dt, weeks_per_year, alpha_H0, age_cut_years, post_mult_H)
 
-  for (i in 1:(N - 1)) {
+  V <- numeric(T); C <- numeric(T); H <- numeric(T); E <- numeric(T)
+  V[1] <- V0; C[1] <- C0; H[1] <- H0
 
-    # Are we inside the intervention window on this step?
-    in_intervention <- (i >= t_start && i <= t_end)
+  for (i in 1:(T - 1)) {
 
-    if (in_intervention) {
-      # During intervention: high reward, strong practice benefit, low penalty for avoidance
-      p_reward   <- p_reward_int
-      delta_up   <- delta_up_int
-      delta_down <- delta_down_int
-    } else {
-      # Outside intervention: baseline parameterization
-      p_reward   <- p_reward_base
-      delta_up   <- delta_up_base
-      delta_down <- delta_down_base
-    }
-
-    # ----- Fast EF decision -----
-    utility <- V[i] - C[i]
+    # ---- Fast EF decision: habit supports utility ----
+    utility <- V[i] - (C[i] + extra_cost_vec[i]) + w_H * H[i]
     E[i] <- 1 / (1 + exp(-utility / tau))
 
-    # ----- Expected reward under current p_reward -----
-    R_exp <- E[i] * p_reward
+    # ---- Realized engagement + realized reward (stochastic) ----
+    engaged <- rbinom(1, 1, prob = E[i])
+    reward  <- if (engaged == 1) rbinom(1, 1, prob = p_reward_vec[i]) * reward_mag else 0
 
-    # ----- Drift terms for value and cost -----
-    dV_det <- alpha_V * (R_exp - V[i])
-    dC_det <- (-kappa_C) + alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
+    # ---- Value learning uses realized reward prediction error ----
+    # (This matters for path dependence; expected reward smooths too much.)
+    dV_det <- alpha_V_vec[i] * (reward - V[i])
 
-    # ----- Stochastic terms -----
+    # ---- Cost learning: only practice reduces cost; no avoidance penalty ----
+    dC_det <- (-kappa_C) + alpha_C_vec[i] * ( - engaged * delta_down )
+
+    # ---- Consolidation: thresholded growth from engagement + decay ----
+    # Build only if engagement propensity is high enough.
+    drive <- pmax(E[i] - theta_H, 0)
+    dH_det <- alpha_H_vec[i] * (drive - H[i]) - gamma_H * H[i]
+
+    # ---- Noise ----
     dV_sto <- sigma_V * sqrt(dt) * rnorm(1)
     dC_sto <- sigma_C * sqrt(dt) * rnorm(1)
+    dH_sto <- sigma_H * sqrt(dt) * rnorm(1)
 
-    # ----- Update states -----
+    # ---- Update ----
     V[i + 1] <- V[i] + dV_det * dt + dV_sto
     C[i + 1] <- C[i] + dC_det * dt + dC_sto
+    H[i + 1] <- H[i] + dH_det * dt + dH_sto
 
-    # Soft bounds to keep values in a reasonable range
-    V[i + 1] <- max(min(V[i + 1], 1), 0)
-    C[i + 1] <- max(min(C[i + 1], 2), -1)
+    # ---- Bounds ----
+    V[i + 1] <- max(min(V[i + 1], V_max), V_min)
+    C[i + 1] <- max(min(C[i + 1], C_max), C_min)
+    H[i + 1] <- max(min(H[i + 1], H_max), H_min)
   }
 
-  # Final EF propensity
-  E[N] <- 1 / (1 + exp(-(V[N] - C[N]) / tau))
+  E[T] <- 1 / (1 + exp(-(V[T] - (C[T] + extra_cost_vec[T]) + w_H * H[T]) / tau))
 
   tibble(
-    step = 1:N,
-    time = (1:N) * dt,
-    V = V,
-    C = C,
-    E = E
+    t = seq(0, by = dt, length.out = T),   # weeks
+    year = t / weeks_per_year,            # years
+    V = V, C = C, H = H, E = E
   )
 }
 
-# ----- Set up early vs late intervention windows -----
+# ----------------------------
+# 4) Intervention windows (years)
+# ----------------------------
+int_len_years <- 1.0
 
-dt <- 0.02
-T  <- 3000
-window_len <- 400   # duration of intervention in steps (~8 time units)
+early_start_year <- 0.5
+early_end_year   <- early_start_year + int_len_years
 
-early_start <- 200
-early_end   <- early_start + window_len
+late_start_year  <- 7.5
+late_end_year    <- late_start_year + int_len_years
 
-late_start  <- 1800
-late_end    <- late_start + window_len
+early_start_idx <- clamp_idx(to_idx(early_start_year))
+early_end_idx   <- clamp_idx(to_idx(early_end_year))
+late_start_idx  <- clamp_idx(to_idx(late_start_year))
+late_end_idx    <- clamp_idx(to_idx(late_end_year))
 
-# Early intervention: window starts when EF has not yet fully collapsed
-early <- simulate_ef_sde_window(
-  T = T,
-  dt = dt,
-  t_start = early_start,
-  t_end   = early_end,
-  seed = 1
-) %>%
-  mutate(condition = "Early")
+# ----------------------------
+# 5) Reward schedules: reward-only intervention
+# ----------------------------
+p_base <- 0.03
+p_int  <- 0.95
 
-# Late intervention: same window, but applied after long baseline drift
-late <- simulate_ef_sde_window(
-  T = T,
-  dt = dt,
-  t_start = late_start,
-  t_end   = late_end,
-  seed = 1
-) %>%
-  mutate(condition = "Late")
+p_early <- rep(p_base, default_pars$T)
+p_late  <- rep(p_base, default_pars$T)
 
-df_int <- bind_rows(early, late)
+p_early[early_start_idx:early_end_idx] <- p_int
+p_late[late_start_idx:late_end_idx]    <- p_int
 
-# Data frame encoding the intervention window for each condition (for shading)
-interv_df <- tibble(
-  condition = c("Early", "Late"),
-  xmin = c(early_start,  late_start)  * dt,
-  xmax = c(early_end,    late_end)    * dt,
-  ymin = -Inf,
-  ymax =  Inf
+extra0 <- rep(0, default_pars$T)
+
+# ----------------------------
+# 6) Replicate across seeds (robust summary)
+# ----------------------------
+R <- 10
+seed_base <- 1000
+
+run_replicates <- function(condition, p_vec){
+  seeds <- seed_base + seq_len(R)
+
+  bind_rows(lapply(seeds, function(s){
+    simulate_ef_sde_reward_only_divergent(
+      p_reward_vec = p_vec,
+      extra_cost_vec = extra0,
+      seed = s
+    ) %>%
+      add_E_smooth() %>%
+      mutate(condition = condition, rep_seed = s)
+  }))
+}
+
+df_rep <- bind_rows(
+  run_replicates("Early", p_early),
+  run_replicates("Late",  p_late)
 )
 
-ggplot(df_int, aes(time, E)) +
-  # Shaded intervention windows for each panel
+# ----------------------------
+# 7) Summarize mean + 95% intervals
+# ----------------------------
+summarize_over_reps <- function(df, var){
+  df %>%
+    group_by(condition, year) %>%
+    summarize(
+      mean = mean(.data[[var]], na.rm = TRUE),
+      lo   = quantile(.data[[var]], 0.025, na.rm = TRUE),
+      hi   = quantile(.data[[var]], 0.975, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(var = var)
+}
+
+df_sum <- bind_rows(
+  summarize_over_reps(df_rep, "V"),
+  summarize_over_reps(df_rep, "E_smooth")
+) %>%
+  mutate(var = factor(var, levels = c("V", "E_smooth")))
+
+labels_1D <- c(
+  V = "Expected Value V(t) (mean ± 95% across seeds)",
+  E_smooth = "Smoothed EF  E_smooth(t) (13-week rolling mean; mean ± 95%)"
+)
+
+windows_df <- tibble(
+  condition = c("Early","Late"),
+  xmin = c(early_start_year, late_start_year),
+  xmax = c(early_end_year,   late_end_year),
+  ymin = -Inf, ymax = Inf
+)
+
+# ----------------------------
+# 8) Plot (V top, E_smooth bottom) with timing-colored windows
+# ----------------------------
+ggplot(df_sum, aes(year, mean, color = condition, group = condition)) +
   geom_rect(
-    data = interv_df,
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    data = windows_df,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = condition),
     inherit.aes = FALSE,
-    fill = "red",
-    alpha = 0.1
+    alpha = 0.10,
+    show.legend = FALSE
   ) +
-  geom_line(linewidth = 0.5) +
-  facet_wrap(~ condition, ncol = 1) +
+  geom_ribbon(aes(ymin = lo, ymax = hi, fill = condition),
+              alpha = 0.12, color = NA, show.legend = FALSE) +
+  geom_line(linewidth = 0.3) +
+  facet_wrap(~ var, scales = "free_y", ncol = 1,
+             labeller = as_labeller(labels_1D)) +
   theme_minimal(base_size = 15) +
-  coord_cartesian(ylim = c(0, 1)) +
   labs(
-    title = "Figure 1D. Temporary Early vs Late Intervention",
-    x = "Time",
-    y = "EF Propensity E(t)"
-  )
+    title = "Figure 1D. Timing Effects of a Reward-Based EF Intervention\n(Reward-only; critical-period plasticity + consolidation yields divergence)",
+    x = "Time (years)",
+    y = "Level",
+    color = "Intervention timing"
+  ) +
+  theme(legend.position = "bottom")
+
 
 ```
 
 
-In both panels, the system starts from the same initial cost and value state and evolves under the same baseline parameters outside the intervention window. Given these initial conditions and the noise level, EF propensity drifts downward over time under the baseline.
-
-The shaded region marks a temporary intervention that briefly makes EF more rewarding and more effective at reducing cost.
-
-In the Early condition, this window arrives while the system is still relatively flexible: cost is not yet extremely high, and value has not fully collapsed. The intervention shifts the system into a more favorable cost–value region, and EF propensity remains higher afterward.
-
-In the Late condition, the same window occurs after a long period of drift toward low EF. The intervention produces a visible bump in EF propensity during the window, but once it ends, EF quickly returns to a lower level.
-
-This illustrates how the timing of a finite intervention can matter even if its content and duration are identical.
