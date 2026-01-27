@@ -504,146 +504,122 @@ We’ll layer environment changes (stress, interventions) on top of this later.
 #| echo: true
 
 simulate_ef_sde <- function(
-T = default_pars$T,
-dt = default_pars$dt,
+  T = default_pars$T,
+  dt = default_pars$dt,
 
-# ---- Initial states ----
+  V0 = default_pars$V0,
+  C0 = default_pars$C0,
+  K0 = default_pars$K0,
 
-V0 = default_pars$V0,
-C0 = default_pars$C0,
-K0 = default_pars$K0,
+  alpha_V = default_pars$alpha_V,
 
-# ---- Learning rates ----
+  # keep these for backwards-compatibility, but you can set alpha_C=0 to match the writeup
+  alpha_C = default_pars$alpha_C,
+  delta_up   = default_pars$delta_up,
+  delta_down = default_pars$delta_down,
 
-alpha_V = default_pars$alpha_V,
-alpha_C = default_pars$alpha_C,
+  kappa_C = default_pars$kappa_C,
 
-# ---- Cost learning amplitudes ----
+  # NEW: K -> C coupling (matches the writeup’s dC equation)
+  beta_K = default_pars$beta_K,
 
-delta_up   = default_pars$delta_up,
-delta_down = default_pars$delta_down,
+  rho_mat  = default_pars$rho_mat,
+  rho_prac = default_pars$rho_prac,
+  monotone_K = default_pars$monotone_K,
 
-# ---- Maturational drift on cost ----
+  tau = default_pars$tau,
 
-kappa_C = default_pars$kappa_C,
+  # reward schedule: either scalar p_reward OR vector p_reward_vec
+  p_reward = default_pars$p_reward,
+  p_reward_vec = NULL,
+  reward_mag = default_pars$reward_mag,
 
-# ---- Capacity parameters (NEW) ----
+  sigma_V = default_pars$sigma_V,
+  sigma_C = default_pars$sigma_C,
 
-beta_K   = default_pars$beta_K,
-rho_mat  = default_pars$rho_mat,
-rho_prac = default_pars$rho_prac,
-monotone_K = default_pars$monotone_K,
+  V_min = 0,
+  V_max = reward_mag,
+  C_min = -2,
+  C_max = 2,
+  K_min = 0,
+  K_max = 1,
 
-# ---- Decision ----
-
-tau = default_pars$tau,
-
-# ---- Reward environment ----
-
-p_reward   = default_pars$p_reward,
-reward_mag = default_pars$reward_mag,
-
-# ---- Noise ----
-
-sigma_V = default_pars$sigma_V,
-sigma_C = default_pars$sigma_C,
-
-# ---- Optional bounds ----
-
-V_min = 0,
-V_max = reward_mag,
-C_min = -2,
-C_max = 2,
-K_min = 0,
-K_max = 1,
-
-extra_cost_vec = NULL,
-seed = NULL
+  extra_cost_vec = NULL,
+  seed = NULL
 ){
-if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) set.seed(seed)
 
-stopifnot(V_min < V_max, C_min < C_max, K_min < K_max)
-stopifnot(V0 >= V_min, V0 <= V_max,
-C0 >= C_min, C0 <= C_max,
-K0 >= K_min, K0 <= K_max)
+  N <- T
+  if (is.null(extra_cost_vec)) extra_cost_vec <- rep(0, N)
+  stopifnot(length(extra_cost_vec) == N)
 
-N <- T
-if (is.null(extra_cost_vec)) extra_cost_vec <- rep(0, N)
-stopifnot(length(extra_cost_vec) == N)
+  if (!is.null(p_reward_vec)) {
+    stopifnot(length(p_reward_vec) == N)
+  }
 
-V <- numeric(N)
-C <- numeric(N)
-K <- numeric(N)
-E <- numeric(N)
+  V <- numeric(N); C <- numeric(N); K <- numeric(N); E <- numeric(N)
+  V[1] <- V0; C[1] <- C0; K[1] <- K0
 
-V[1] <- V0
-C[1] <- C0
-K[1] <- K0
+  for (i in 1:(N - 1)) {
 
-for (i in 1:(N - 1)) {
+    # -----------------------------
+    # Fast decision (NO direct K term):
+    # E depends on C, and K affects E only via reducing C over time
+    # -----------------------------
+    utility <- V[i] - (C[i] + extra_cost_vec[i])
+    E[i] <- 1 / (1 + exp(-utility / tau))
 
-# ------------------------------------------------------------
-# Fast EF propensity:
-# capacity reduces effective cost -> C_eff = C - beta_K * K
-# ------------------------------------------------------------
-C_eff <- C[i] - beta_K * K[i]
-utility <- V[i] - (C_eff + extra_cost_vec[i])
-E[i] <- 1 / (1 + exp(-utility / tau))
+    # time-varying or constant reward probability
+    p_i <- if (is.null(p_reward_vec)) p_reward else p_reward_vec[i]
 
-# ------------------------------------------------------------
-# Mean-field expected reward rate
-# ------------------------------------------------------------
-R_exp <- E[i] * p_reward * reward_mag
+    # expected reward rate
+    R_exp <- E[i] * p_i * reward_mag
 
-# ------------------------------------------------------------
-# Slow dynamics: value and cost
-# ------------------------------------------------------------
-dV_det <- alpha_V * (R_exp - V[i])
-dC_det <- (-kappa_C) + alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
+    # -----------------------------
+    # Slow dynamics
+    # -----------------------------
+    dV_det <- alpha_V * (R_exp - V[i])
 
-# ------------------------------------------------------------
-# NEW: Capacity growth (monotone, saturating)
-#   - maturation: rho_mat * (1-K)
-#   - practice:   rho_prac * E * (1-K)
-# ------------------------------------------------------------
-dK_det <- (rho_mat * (1 - K[i])) + (rho_prac * E[i] * (1 - K[i]))
+    # Cost: maturation + capacity reduces cost (the new story)
+    dC_det <- (-kappa_C) - (beta_K * K[i])
 
-# Noise
-dV_sto <- sigma_V * sqrt(dt) * rnorm(1)
-dC_sto <- sigma_C * sqrt(dt) * rnorm(1)
+    # OPTIONAL: if you still want experience-dependent cost learning, keep this term;
+    # set alpha_C=0 to remove it and match the writeup exactly.
+    dC_det <- dC_det + alpha_C * ((1 - E[i]) * delta_up - E[i] * delta_down)
 
-# Update
-V_next <- V[i] + dV_det * dt + dV_sto
-C_next <- C[i] + dC_det * dt + dC_sto
-K_next <- K[i] + dK_det * dt
+    # Capacity growth: maturation + practice
+    dK_det <- (rho_mat * (1 - K[i])) + (rho_prac * E[i] * (1 - K[i]))
 
-# Bounds
-V_next <- max(min(V_next, V_max), V_min)
-C_next <- max(min(C_next, C_max), C_min)
-K_next <- max(min(K_next, K_max), K_min)
+    # noise
+    dV_sto <- sigma_V * sqrt(dt) * rnorm(1)
+    dC_sto <- sigma_C * sqrt(dt) * rnorm(1)
 
-# Optional: enforce monotone capacity for interpretability
-if (isTRUE(monotone_K)) K_next <- max(K[i], K_next)
+    # update
+    V_next <- V[i] + dV_det * dt + dV_sto
+    C_next <- C[i] + dC_det * dt + dC_sto
+    K_next <- K[i] + dK_det * dt
 
-V[i + 1] <- V_next
-C[i + 1] <- C_next
-K[i + 1] <- K_next
+    # bounds
+    V_next <- max(min(V_next, V_max), V_min)
+    C_next <- max(min(C_next, C_max), C_min)
+    K_next <- max(min(K_next, K_max), K_min)
 
-}
+    if (isTRUE(monotone_K)) K_next <- max(K[i], K_next)
 
-# Final E
+    V[i + 1] <- V_next
+    C[i + 1] <- C_next
+    K[i + 1] <- K_next
+  }
 
-C_eff_T <- C[N] - beta_K * K[N]
-E[N] <- 1 / (1 + exp(-(V[N] - (C_eff_T + extra_cost_vec[N])) / tau))
+  # final E
+  utility_T <- V[N] - (C[N] + extra_cost_vec[N])
+  E[N] <- 1 / (1 + exp(-utility_T / tau))
 
-tibble(
-t = seq(0, by = dt, length.out = N),
-year = t / weeks_per_year,
-V = V,
-C = C,
-K = K,
-E = E
-)
+  tibble(
+    t = seq(0, by = dt, length.out = N),
+    year = (seq(0, by = dt, length.out = N)) / weeks_per_year,
+    V = V, C = C, K = K, E = E
+  )
 }
 
 ```
