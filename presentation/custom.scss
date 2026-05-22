@@ -1,0 +1,360 @@
+/*-- scss:defaults --*/
+
+// Custom colours and variables
+$jet: #131516;
+$accent: #107895;
+$accent2: #9a2515;
+$right-arrow: "\2192";
+
+// Fonts
+@import url('https://fonts.googleapis.com/css?family=Roboto:200,200i,300,300i,350,350i,400,400i&display=swap');
+$font-family-sans-serif: "Roboto", sans-serif !default;
+$presentation-heading-font: "Roboto", sans-serif !default;
+$presentation-heading-color: $jet !default;
+$presentation-heading-font-weight: lighter;
+$presentation-font-size-root: 32px;
+
+// Colors
+$body-color: $jet !default;
+$link-color: $accent !default;
+$selection-bg: #26351c !default;
+
+
+/*-- scss:rules --*/
+
+.reveal a {
+  line-height: 1.5em;
+}
+
+.reveal p {
+  font-weight: lighter;
+  margin-top: 1.25em;
+}
+
+// Title slide
+#title-slide {
+  text-align: left;
+
+  .title {
+    color: $body-color;
+    font-size: 1.35em;
+    font-weight: lighter;
+  }
+
+  .subtitle {
+    color: $accent;
+    font-style: italic;
+    margin-top: 0em;
+    font-weight: lighter;
+  }
+
+  .institute,
+  .quarto-title-affiliation,
+  .quarto-title-author-email {
+    font-style: italic;
+  }
+
+  .author,
+  .quarto-title-author-name {
+    color: $body-color;
+  }
+
+  .quarto-title-authors {
+    display: flex;
+    justify-content: left;
+
+    .quarto-title-author {
+      padding-left: 0em;
+      padding-right: 0em;
+      width: 100%;
+    }
+  }
+}
+
+// Headings
+.reveal h2 {
+  font-weight: lighter;
+  font-size: 1.4em;
+}
+
+.reveal h3 {
+  color: $accent;
+  font-style: italic;
+  font-weight: lighter;
+  font-size: 0.95em;
+}
+
+.reveal h4 {
+  color: $accent2;
+  font-weight: normal;
+  margin-top: 1.25em;
+}
+
+// Alerts
+.alert { color: $accent2; }
+
+.fg { color: var(--col, $jet); }
+
+.bg {
+  background-color: var(--col, #fff);
+  padding: 0.1em;
+  border-radius: 5px;
+  display: inline-block;
+}
+
+// Lists
+.reveal ul {
+  font-weight: lighter;
+  padding-left: 16px;
+
+  li::marker {
+    color: mix($accent, white, 70%);
+  }
+}
+
+.reveal ul ul {
+  list-style: none;
+
+  li:before {
+    content: $right-arrow;
+    color: mix($accent, white, 60%);
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+    margin-right: 0.5em;
+  }
+}
+
+.reveal ol {
+  font-weight: lighter;
+  padding-left: 16px;
+
+  li::marker {
+    color: $accent;
+  }
+}
+
+// Menu button
+.reveal .slide-menu-button {
+  position: fixed;
+  top: 6px;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  pointer-events: none;
+}
+.reveal .slide-menu-button > * { pointer-events: auto; }
+
+// Tables
+.reveal table {
+  margin: auto;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 0.8em;
+}
+
+.reveal table th,
+.reveal table td {
+  border: none;
+  padding: .23em;
+  text-align: left;
+  font-weight: lighter;
+}
+
+.reveal table thead th,
+.reveal .slides table tr:last-child td,
+.reveal .slides table {
+  border-bottom: 2px solid #D3D3D3;
+}
+
+.reveal table thead th { font-weight: bold; }
+.reveal table caption { color: #666666; font-variant: small-caps; }
+
+// Logo
+.reveal img.slide-logo {
+  max-height: 5rem;
+  height: 230%;
+}
+
+// Utility classes
+.smallfont {
+  font-size: 13pt;
+  margin-top: 0em;
+  margin-bottom: 0em;
+}
+
+// Equation box
+.eq-box {
+  background-color: #e8f4f8;
+  border-left: 4px solid $accent;
+  padding: 0.5em 1em;
+  border-radius: 4px;
+  margin: 0.5em 0;
+}
+
+// Colored highlight spans
+.hl { color: $accent; font-weight: 400; }
+.hl2 { color: $accent2; font-weight: 400; }
+
+// Two-column layout helpers
+.col-box {
+  background-color: #f5f5f5;
+  border-radius: 6px;
+  padding: 0.6em 1em;
+  height: 100%;
+}
+
+
+
+
+
+
+.fast-box, .slow-box {
+  padding: 1.0em 1.1em;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  min-height: 330px;
+}
+
+.fast-box {
+  background: #E8F4FF;
+  border-left: 8px solid #2B6CB0;
+}
+
+.slow-box {
+  background: #FFF3D6;
+  border-left: 8px solid #D97706;
+}
+
+.fast-box h3, .slow-box h3 {
+  margin-top: 0;
+  font-size: 1.15em;
+  font-weight: 800;
+}
+
+.fast-box h4, .slow-box h4 {
+  margin-top: -0.45em;
+  color: #4B5563;
+  font-size: 0.78em;
+  font-weight: 600;
+}
+
+.big-var {
+  font-size: 1.35em;
+  font-weight: 800;
+  color: #111827;
+}
+
+.coupling-arrow {
+  font-size: 2.8em;
+  font-weight: 800;
+  text-align: center;
+  margin-top: 2.2em;
+  color: $accent;
+}
+
+.takeaway {
+  margin-top: 0.9em;
+  padding: 0.65em 0.9em;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.92);
+  color: #0F172A;
+  font-weight: 700;
+}
+
+
+.two-boxes {
+  display: flex;
+  gap: 1em;
+  margin-top: 0.7em;
+  margin-bottom: 0.8em;
+}
+
+.mini-box {
+  flex: 1;
+  background: #F8FAFC;
+  border-left: 6px solid $accent;
+  border-radius: 14px;
+  padding: 0.7em 0.9em;
+}
+
+
+.center-lines {
+  text-align: center;
+  margin-top: 0.5em;
+  font-weight: 500;
+}
+
+.center-lines p {
+  margin: 0.25em 0;
+}
+
+.shift-left-lines {
+  text-align: left;
+  margin-left: 2.2em;
+  margin-top: 0.5em;
+  font-weight: 500;
+}
+
+.shift-left-lines p {
+  margin: 0.25em 0;
+}
+
+
+.loop-stack {
+  width: 100%;
+}
+
+.loop-panel {
+  width: 100%;
+}
+
+/* Bigger fixed Mermaid diagram inside loop slides */
+.reveal .loop-diagram {
+  width: 100%;
+  height: 430px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible !important;
+  margin-bottom: 0;
+}
+
+.reveal .loop-diagram .cell,
+.reveal .loop-diagram .cell-output,
+.reveal .loop-diagram .cell-output-display,
+.reveal .loop-diagram pre,
+.reveal .loop-diagram div.mermaid {
+  width: 100% !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-align: center;
+}
+
+.reveal .loop-diagram svg {
+  width: 1000px !important;
+  max-width: none !important;
+  height: 390px !important;
+}
+
+
+
+.loop-eq {
+  min-height: 2.2em;   // keeps equation area stable
+  text-align: center;
+  margin-top: 0.2em;
+  margin-bottom: 0.3em;
+}
+
+.loop-text {
+  min-height: 2.6em;   // keeps caption area stable
+  text-align: center;
+}
+
+.loop-takeaway {
+  min-height: 2.8em;
+  text-align: center;
+  font-weight: 600;
+  color: #1f2440;
+}

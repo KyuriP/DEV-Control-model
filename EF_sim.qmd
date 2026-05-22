@@ -246,21 +246,39 @@ $$
 
   
 
-::: {.callout-tip title="Why this is considered mean-field" collapse="true"}
+::: {.callout-tip title="Expected-reward approximation" collapse="true"}
 
-In a fully discrete version, two random events happen at each step:
-  
-1. engagement $A(t)\sim\mathrm{Bernoulli}(E(t))$
-2. reward $Z(t)\sim\mathrm{Bernoulli}(p_{\text{reward}})$ conditional on $A(t)=1$
+In a fully discrete version of the model, two random events would occur at each step:
 
-The realized reward is $R(t)=A(t)Z(t)\text{reward\_mag}$, which is noisy.
+1. The child either engages EF or not:
+   $$
+   A(t)\sim\mathrm{Bernoulli}(E(t)).
+   $$
 
-The mean-field approximation replaces that noisy realized reward with its conditional expectation:
-  $$
-    \mathbb{E}[R(t)\mid E(t)]=E(t)p_{\text{reward}}\text{reward\_mag}.
-  $$
+2. If EF is engaged, reward is either received or not:
+   $$
+   Z(t)\sim\mathrm{Bernoulli}(p_{\text{reward}}).
+   $$
 
-So “mean-field” means: we drive learning by the ***average reward signal**$ implied by the current propensity, rather than sampling binary engagement and reward each step.
+The realized reward would be
+
+$$
+R(t)=A(t)Z(t)\text{reward\_mag},
+$$
+
+which is noisy because both engagement and reward are sampled.
+
+In the present model, we do not sample these binary events directly. Instead, value learning is driven by the expected reward implied by the current engagement propensity:
+
+$$
+R^{\exp}(t)
+=
+\mathbb{E}[R(t)\mid E(t)]
+=
+E(t)p_{\text{reward}}\text{reward\_mag}.
+$$
+
+Thus, $E(t)$ can be read as the expected frequency or probability of engaging EF, and $R^{\exp}(t)$ is the average reward signal that value learning tracks.
 
 :::
 
@@ -290,7 +308,7 @@ This is the continuous-time analogue of the standard reinforcement-learning upda
     V \leftarrow V + \alpha \cdot (\text{reward signal} - V).
   $$ 
 
-* $\sigma_V dW_V(t)$: stochastic fluctuations in learning (Brownian noise)
+* $\sigma_V dW_V(t)$: stochastic fluctuations in learning (Brownian noise) ***considered 0; unless you are interested in specific stochastic behavior of V or C, having $\tau$ is often enough to model randomness with EF engagement.***
 
 ---
 
@@ -387,8 +405,11 @@ Together, these coupled dynamics can produce:
 * **Early divergence and stable individual differences**
 Small between-child differences in payoff environment (e.g., $p_{\text{reward}}$) or initial conditions can push learning onto different trajectories in $V(t)$, which then propagate to engagement $E(t)$, and—through practice—into capacity growth $K(t)$ and effort cost $C(t)$.
 
-* **Normative developmental improvement**
-Developmental gains arise from (i) maturation ($\rho_{\text{mat}}$ increasing $K(t)$, and $\kappa_C$ reducing $C(t))$ and (ii) practice-dependent capacity growth ($E(t)\to K(t)$), which further lowers cost via the $K(t)\to C(t)$ link.
+<!-- * **Normative developmental improvement** -->
+<!-- Developmental gains arise from (i) maturation ($\rho_{\text{mat}}$ increasing $K(t)$, and $\kappa_C$ reducing $C(t))$ and (ii) practice-dependent capacity growth ($E(t)\to K(t)$), which further lowers cost via the $K(t)\to C(t)$ link. -->
+
+* **Normative developmental improvement with saturation**  
+Developmental gains arise from bounded capacity growth: maturation and engagement-dependent practice increase $K(t)$, but growth slows as the remaining headroom $(1-K(t))$ shrinks. Higher $K(t)$ then lowers subjective effort through the $\beta_K K(t)$ term in the cost equation, making future engagement more likely.
 
 * **Transient dips in engagement under stress**
 A temporary increase in $\text{extra\_cost}(t)$ reduces momentary utility and produces short-run drops in $E(t)$. Because $E(t)$ also drives practice, stress can additionally slow the *rate* of capacity growth during the stress window.
@@ -489,13 +510,13 @@ default_pars <- list(
   reward_mag = 1,
 
   # ---- Noise ----
-  sigma_V = 0.005,
-  sigma_C = 0.02,
+  sigma_V = 0.003,
+  sigma_C = 0.008,
 
   # ---- Capacity ----
   beta_K     = 0.005,    # K lowers C (shifts cost downward)
-  rho_mat    = 0.00005,
-  rho_prac   = 0.0020,
+  rho_mat    = 0.0016,
+  rho_prac   = 0.0060,
   monotone_K = TRUE
 )
 
@@ -779,7 +800,7 @@ ggplot(df_A_long, aes(year, value, color = label, group = child)) +
 * $V(t)$ tracks the learned expected payoff of engaging EF and is higher when EF tends to pay off more often.
 * $C(t)$ fluctuates around the baseline $C_{\text{set}}$ but is shifted downward over time by capacity $K(t)$.
 * $E(t)$ is the fast, moment-to-moment probability of engaging EF, determined by the current utility $V(t) - C(t)$.
-* $K(t)$ is a slow developmental state that grows through maturation and (critically) through engagement-driven practice, creating persistent differences in capacity trajectories.
+* $K(t)$ is a slow developmental state that grows through maturation and engagement-driven practice. In this parameter regime, children differ mainly in the rate at which they approach a shared developmental ceiling, rather than in indefinite long-run capacity growth.
 
 **Mechanism:** $p_{\text{reward}}$ influences the value-of-control pathway $(V)$, while $C_{\text{set}}$ sets the baseline difficulty of engaging. Together they shape engagement $E(t)$, which drives practice-based growth in $K(t)$; rising $K(t)$ then reduces subjective costs $C(t)$, stabilizing individual differences over development.
 
@@ -853,7 +874,8 @@ simulate_one <- function(T, dt, p_reward, C_set, seed, child, label, rep, thin_k
 
 df_rep <- future_pmap_dfr(
   .l = list(
-    T       = run_grid$T_total_figure %||% T_total_figure, # fallback if column absent
+    T = rep(T_total_figure, nrow(run_grid)),
+    #T       = run_grid$T_total_figure %||% T_total_figure, # fallback if column absent
     dt      = dt,
     p_reward= run_grid$p_reward,
     C_set   = run_grid$C_set,
@@ -911,6 +933,736 @@ ggplot(df_sum, aes(year, mean, color = label, group = label)) +
 
 
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#| label: talk_helpers
+#| echo: true
+
+
+#| label: naturalistic_result_helpers
+#| echo: true
+
+# ============================================================
+# Naturalistic result helper code
+# Keeps the model unchanged.
+# Only changes simulation regimes + plotting.
+# ============================================================
+
+# Main presentation parameter regime:
+# - less extreme than the previous version
+# - enough feedback to show qualitative behavior
+# - not so strong that everything saturates immediately
+story_pars <- modifyList(default_pars, list(
+  V0 = 0.10,
+  C0 = 0.95,
+  K0 = 0.15,
+
+  tau = 0.50,
+  reward_mag = 1.40,
+
+  sigma_V = 0.003,
+  sigma_C = 0.010,
+
+  eta_C = 0.020,
+  beta_K = 0.0065,
+
+  rho_mat  = 0.0011,
+  rho_prac = 0.0048
+))
+
+smooth_weeks_E <- 26
+smooth_steps_E <- round(smooth_weeks_E / dt)
+
+smooth_weeks_K <- 26
+smooth_steps_K <- round(smooth_weeks_K / dt)
+
+add_plot_measures <- function(df, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed + 9999)
+
+  A <- rbinom(nrow(df), size = 1, prob = df$E)
+
+  df %>%
+    arrange(year) %>%
+    mutate(
+      # latent engagement propensity, smoothed
+      E_smooth = zoo::rollmean(E, k = smooth_steps_E, fill = NA, align = "right"),
+      E_smooth = ifelse(is.na(E_smooth), E, E_smooth),
+
+      # realized binary engagement, plotted as rolling frequency
+      A = A,
+      A_freq = zoo::rollmean(A, k = smooth_steps_E, fill = NA, align = "right"),
+      A_freq = ifelse(is.na(A_freq), E, A_freq),
+
+      # capacity growth rate, smoothed
+      K_growth = c(NA, diff(K) / diff(year)),
+      K_growth = ifelse(is.na(K_growth), 0, K_growth),
+      K_growth_smooth = zoo::rollmean(K_growth, k = smooth_steps_K, fill = NA, align = "right"),
+      K_growth_smooth = ifelse(is.na(K_growth_smooth), K_growth, K_growth_smooth)
+    )
+}
+
+run_story_reps <- function(condition, pars_override, R = 40, seed_base = 1000,
+                           base_pars = story_pars) {
+  bind_rows(lapply(seq_len(R), function(r) {
+    seed_r <- seed_base + r
+
+    args <- modifyList(base_pars, pars_override)
+    args$seed <- seed_r
+
+    do.call(simulate_ef_sde, args) %>%
+      add_plot_measures(seed = seed_r) %>%
+      mutate(
+        condition = condition,
+        rep = r
+      )
+  }))
+}
+
+summarize_story <- function(df, vars) {
+  df %>%
+    select(year, condition, rep, all_of(vars)) %>%
+    pivot_longer(
+      cols = all_of(vars),
+      names_to = "var",
+      values_to = "value"
+    ) %>%
+    group_by(condition, year, var) %>%
+    summarize(
+      mean = mean(value, na.rm = TRUE),
+      lo   = quantile(value, 0.10, na.rm = TRUE),
+      hi   = quantile(value, 0.90, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
+theme_result <- function(base_size = 15) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      legend.position = "bottom",
+      strip.text = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold"),
+      plot.subtitle = element_text(size = base_size - 2)
+    )
+}
+```
+
+```{r}
+#| label: fig_result1_stable_naturalistic
+#| fig-width: 10
+#| fig-height: 7
+#| fig-align: "center"
+
+# ============================================================
+# Result 1: Stable individual differences
+# More realistic profile set:
+# - not extreme high/low categories
+# - shows graded divergence, not all-or-nothing saturation
+# ============================================================
+
+years_stable <- 18
+T_stable <- round(years_stable * weeks_per_year / dt) + 1
+
+stable_conditions <- list(
+  "Supportive" = list(
+    T = T_stable,
+    p_reward = 0.82,
+    C_set = 0.82
+  ),
+  "Rewarding but effortful" = list(
+    T = T_stable,
+    p_reward = 0.82,
+    C_set = 1.05
+  ),
+  "Low payoff but manageable" = list(
+    T = T_stable,
+    p_reward = 0.64,
+    C_set = 0.88
+  ),
+  "Low payoff / high effort" = list(
+    T = T_stable,
+    p_reward = 0.58,
+    C_set = 1.10
+  )
+)
+
+df_stable <- bind_rows(lapply(names(stable_conditions), function(nm) {
+  run_story_reps(
+    condition = nm,
+    pars_override = stable_conditions[[nm]],
+    R = 40,
+    seed_base = 2000 + match(nm, names(stable_conditions)) * 1000
+  )
+}))
+
+df_stable_sum <- summarize_story(
+  df_stable,
+  vars = c("A_freq", "K")
+) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c("A_freq", "K"),
+      labels = c(
+        "Realized EF engagement frequency",
+        "Developmental capacity K(t)"
+      )
+    ),
+    condition = factor(condition, levels = names(stable_conditions))
+  )
+
+df_stable_examples <- df_stable %>%
+  filter(rep <= 6) %>%
+  select(year, condition, rep, A_freq, K) %>%
+  pivot_longer(
+    cols = c(A_freq, K),
+    names_to = "var",
+    values_to = "value"
+  ) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c("A_freq", "K"),
+      labels = c(
+        "Realized EF engagement frequency",
+        "Developmental capacity K(t)"
+      )
+    ),
+    condition = factor(condition, levels = names(stable_conditions))
+  )
+
+ggplot() +
+  geom_line(
+    data = df_stable_examples,
+    aes(year, value, group = interaction(condition, rep), color = condition),
+    alpha = 0.18,
+    linewidth = 0.35
+  ) +
+  geom_ribbon(
+    data = df_stable_sum,
+    aes(year, ymin = lo, ymax = hi, fill = condition),
+    alpha = 0.10,
+    color = NA
+  ) +
+  geom_line(
+    data = df_stable_sum,
+    aes(year, mean, color = condition),
+    linewidth = 0.9
+  ) +
+  facet_wrap(~ var, ncol = 1, scales = "free_y") +
+  theme_result() +
+  labs(
+    title = "Stable differences in EF engagement emerge gradually",
+    subtitle = "Profiles differ in payoff and subjective effort, but all follow the same learning and capacity dynamics",
+    x = "Developmental time since model start (years)",
+    y = NULL,
+    color = NULL,
+    fill = NULL
+  )
+```  
+  
+```{r}  
+#| label: fig_result2_development_naturalistic
+#| fig-width: 10
+#| fig-height: 7
+#| fig-align: "center"
+
+# ============================================================
+# Result 2: Developmental improvement
+# Shows capacity, engagement, and cost in a typical context.
+# Includes stochastic trajectories behind the mean.
+# ============================================================
+
+years_dev <- 18
+T_dev <- round(years_dev * weeks_per_year / dt) + 1
+
+df_dev <- run_story_reps(
+  condition = "Typical context",
+  pars_override = list(
+    T = T_dev,
+    p_reward = 0.76,
+    C_set = 0.92
+  ),
+  R = 50,
+  seed_base = 5000
+)
+
+df_dev_sum <- summarize_story(
+  df_dev,
+  vars = c("K", "A_freq", "C")
+) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c("K", "A_freq", "C"),
+      labels = c(
+        "Capacity K(t)",
+        "Realized EF engagement frequency",
+        "Subjective effort cost C(t)"
+      )
+    )
+  )
+
+df_dev_examples <- df_dev %>%
+  filter(rep <= 10) %>%
+  select(year, condition, rep, K, A_freq, C) %>%
+  pivot_longer(
+    cols = c(K, A_freq, C),
+    names_to = "var",
+    values_to = "value"
+  ) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c("K", "A_freq", "C"),
+      labels = c(
+        "Capacity K(t)",
+        "Realized EF engagement frequency",
+        "Subjective effort cost C(t)"
+      )
+    )
+  )
+
+ggplot() +
+  geom_line(
+    data = df_dev_examples,
+    aes(year, value, group = rep),
+    alpha = 0.18,
+    linewidth = 0.35
+  ) +
+  geom_ribbon(
+    data = df_dev_sum,
+    aes(year, ymin = lo, ymax = hi),
+    alpha = 0.16,
+    color = NA
+  ) +
+  geom_line(
+    data = df_dev_sum,
+    aes(year, mean),
+    linewidth = 0.95
+  ) +
+  facet_wrap(~ var, ncol = 1, scales = "free_y") +
+  theme_result() +
+  labs(
+    title = "Developmental improvement emerges through capacity, effort, and engagement",
+    subtitle = "Capacity growth lowers subjective effort, which gradually supports more frequent EF engagement",
+    x = "Developmental time since model start (years)",
+    y = NULL
+  )
+```  
+  
+```{r}  
+#| label: fig_result3_stress_naturalistic
+#| fig-width: 10
+#| fig-height: 8
+#| fig-align: "center"
+
+# ============================================================
+# Result 3: Transient stress
+# Stress enters as a smooth temporary increase in decision cost.
+# Plot actual engagement, actual K, and K difference from baseline.
+# ============================================================
+
+years_stress <- 10
+T_stress <- round(years_stress * weeks_per_year / dt) + 1
+year_vec_stress <- seq(0, by = dt, length.out = T_stress) / weeks_per_year
+
+make_stress_pulse <- function(year, peak_year = 4.0, width = 0.45, height = 0.45) {
+  height * exp(-0.5 * ((year - peak_year) / width)^2)
+}
+
+extra_cost_stress <- make_stress_pulse(
+  year = year_vec_stress,
+  peak_year = 4.0,
+  width = 0.45,
+  height = 0.45
+)
+
+df_stress <- bind_rows(
+  run_story_reps(
+    condition = "No stress",
+    pars_override = list(
+      T = T_stress,
+      p_reward = 0.76,
+      C_set = 0.92,
+      extra_cost_vec = rep(0, T_stress)
+    ),
+    R = 50,
+    seed_base = 7000
+  ),
+  run_story_reps(
+    condition = "Stress episode",
+    pars_override = list(
+      T = T_stress,
+      p_reward = 0.76,
+      C_set = 0.92,
+      extra_cost_vec = extra_cost_stress
+    ),
+    R = 50,
+    seed_base = 7000
+  )
+)
+
+# Raw trajectories: engagement and capacity
+df_stress_raw_sum <- summarize_story(
+  df_stress,
+  vars = c("A_freq", "K")
+) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c("A_freq", "K"),
+      labels = c(
+        "Realized EF engagement frequency",
+        "Capacity K(t)"
+      )
+    )
+  )
+
+# ============================================================
+# Stress figure: plot engagement dip + accumulated consequences
+# ============================================================
+
+# Same-seed baseline comparison
+df_stress_base <- df_stress %>%
+  filter(condition == "No stress") %>%
+  group_by(rep) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(
+    K_growth_base = c(NA, diff(K) / diff(year)),
+    K_growth_base = ifelse(is.na(K_growth_base), first(na.omit(K_growth_base)), K_growth_base),
+    K_growth_base = pmax(K_growth_base, 0.01)
+  ) %>%
+  ungroup() %>%
+  select(rep, year, E_base = E_smooth, K_base = K, K_growth_base)
+
+df_stress_effect <- df_stress %>%
+  filter(condition == "Stress episode") %>%
+  left_join(df_stress_base, by = c("rep", "year")) %>%
+  group_by(rep) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(
+    missed_E = pmax(E_base - E_smooth, 0),
+    cumulative_missed_engagement_weeks = cumsum(missed_E * dt),
+    capacity_delay_months = pmax((K_base - K) / K_growth_base * 12, 0)
+  ) %>%
+  ungroup()
+
+# Raw engagement panel
+df_stress_raw_sum <- summarize_story(
+  df_stress,
+  vars = c("A_freq")
+) %>%
+  mutate(
+    var = "Realized EF engagement frequency"
+  )
+
+# Effect panels
+df_stress_effect_sum <- df_stress_effect %>%
+  select(year, condition, rep,
+         cumulative_missed_engagement_weeks,
+         capacity_delay_months) %>%
+  pivot_longer(
+    cols = c(cumulative_missed_engagement_weeks, capacity_delay_months),
+    names_to = "var",
+    values_to = "value"
+  ) %>%
+  group_by(condition, year, var) %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    lo   = quantile(value, 0.10, na.rm = TRUE),
+    hi   = quantile(value, 0.90, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    var = recode(
+      var,
+      cumulative_missed_engagement_weeks = "Cumulative missed EF engagement",
+      capacity_delay_months = "Capacity delay relative to no-stress baseline"
+    )
+  )
+
+df_stress_plot <- bind_rows(
+  df_stress_raw_sum %>%
+    rename(value = mean) %>%
+    mutate(mean = value) %>%
+    select(year, condition, var, mean, lo, hi),
+  df_stress_effect_sum
+) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c(
+        "Realized EF engagement frequency",
+        "Cumulative missed EF engagement",
+        "Capacity delay relative to no-stress baseline"
+      )
+    )
+  )
+
+stress_shade <- tibble(
+  xmin = 3.1,
+  xmax = 4.9,
+  ymin = -Inf,
+  ymax = Inf
+)
+
+ggplot(df_stress_plot, aes(year, mean, color = condition, fill = condition)) +
+  geom_rect(
+    data = stress_shade,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    inherit.aes = FALSE,
+    alpha = 0.08,
+    color = NA
+  ) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.12, color = NA) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~ var, ncol = 1, scales = "free_y") +
+  theme_result() +
+  labs(
+    title = "Stress disrupts engagement more than capacity",
+    subtitle = "A short stress episode causes a temporary engagement dip and a small accumulated developmental delay",
+    x = "Developmental time since model start (years)",
+    y = NULL,
+    color = NULL,
+    fill = NULL
+  )
+```  
+  
+  
+```{r}
+#| label: fig_result4_intervention_naturalistic
+#| fig-width: 10
+#| fig-height: 9
+#| fig-align: "center"
+
+# ============================================================
+# Result 4: Early vs late reward intervention
+# Shows raw trajectories AND differences from no-intervention baseline.
+# ============================================================
+
+years_int <- 16
+T_int <- round(years_int * weeks_per_year / dt) + 1
+year_vec_int <- seq(0, by = dt, length.out = T_int) / weeks_per_year
+
+timing_pars <- modifyList(story_pars, list(
+  rho_mat  = 0.0009,
+  rho_prac = 0.0060,
+  beta_K   = 0.0070,
+  sigma_V = 0.002,
+  sigma_C = 0.006
+))
+
+make_reward_boost <- function(year, base_p = 0.66, peak_p = 0.84,
+                              start_year, end_year) {
+  p <- rep(base_p, length(year))
+  inside <- year >= start_year & year <= end_year
+
+  phase <- (year[inside] - start_year) / (end_year - start_year)
+  smooth_window <- sin(pi * phase)^2
+
+  p[inside] <- base_p + (peak_p - base_p) * smooth_window
+  p
+}
+
+p_base <- 0.66
+
+p_none <- rep(p_base, T_int)
+
+p_early <- make_reward_boost(
+  year = year_vec_int,
+  base_p = p_base,
+  peak_p = 0.84,
+  start_year = 3.0,
+  end_year = 5.0
+)
+
+p_late <- make_reward_boost(
+  year = year_vec_int,
+  base_p = p_base,
+  peak_p = 0.84,
+  start_year = 10.0,
+  end_year = 12.0
+)
+
+run_timing_reps <- function(condition, p_vec, R = 50, seed_base = 9000) {
+  bind_rows(lapply(seq_len(R), function(r) {
+    seed_r <- seed_base + r
+
+    args <- modifyList(timing_pars, list(
+      T = T_int,
+      p_reward = p_base,
+      p_reward_vec = p_vec,
+      C_set = 0.96,
+      seed = seed_r
+    ))
+
+    do.call(simulate_ef_sde, args) %>%
+      add_plot_measures(seed = seed_r) %>%
+      mutate(
+        condition = condition,
+        rep = r
+      )
+  }))
+}
+
+df_timing_raw <- bind_rows(
+  run_timing_reps("No intervention", p_none,  R = 50, seed_base = 9000),
+  run_timing_reps("Early reward boost", p_early, R = 50, seed_base = 9000),
+  run_timing_reps("Late reward boost",  p_late,  R = 50, seed_base = 9000)
+)
+
+# Raw trajectories
+df_timing_raw_sum <- summarize_story(
+  df_timing_raw,
+  vars = c("A_freq", "K")
+) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c("A_freq", "K"),
+      labels = c(
+        "Realized EF engagement frequency",
+        "Capacity K(t)"
+      )
+    )
+  )
+
+# ============================================================
+# Intervention figure: raw trajectories + cumulative consequences
+# ============================================================
+
+df_timing_base <- df_timing_raw %>%
+  filter(condition == "No intervention") %>%
+  group_by(rep) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(
+    K_growth_base = c(NA, diff(K) / diff(year)),
+    K_growth_base = ifelse(is.na(K_growth_base), first(na.omit(K_growth_base)), K_growth_base),
+    K_growth_base = pmax(K_growth_base, 0.01)
+  ) %>%
+  ungroup() %>%
+  select(rep, year, E_base = E_smooth, K_base = K, K_growth_base)
+
+df_timing_effect <- df_timing_raw %>%
+  filter(condition != "No intervention") %>%
+  left_join(df_timing_base, by = c("rep", "year")) %>%
+  group_by(condition, rep) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(
+    extra_E = E_smooth - E_base,
+    cumulative_extra_engagement_weeks = cumsum(extra_E * dt),
+    capacity_lead_months = pmax((K - K_base) / K_growth_base * 12, 0)
+  ) %>%
+  ungroup()
+
+# Raw trajectory panels
+df_timing_raw_sum <- summarize_story(
+  df_timing_raw,
+  vars = c("A_freq", "K")
+) %>%
+  mutate(
+    var = recode(
+      var,
+      A_freq = "Realized EF engagement frequency",
+      K = "Capacity K(t)"
+    )
+  )
+
+# Cumulative effect panels
+df_timing_effect_sum <- df_timing_effect %>%
+  select(year, condition, rep,
+         cumulative_extra_engagement_weeks,
+         capacity_lead_months) %>%
+  pivot_longer(
+    cols = c(cumulative_extra_engagement_weeks, capacity_lead_months),
+    names_to = "var",
+    values_to = "value"
+  ) %>%
+  group_by(condition, year, var) %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    lo   = quantile(value, 0.10, na.rm = TRUE),
+    hi   = quantile(value, 0.90, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    var = recode(
+      var,
+      cumulative_extra_engagement_weeks = "Cumulative extra EF engagement",
+      capacity_lead_months = "Capacity lead relative to baseline"
+    )
+  )
+
+df_timing_plot <- bind_rows(
+  df_timing_raw_sum,
+  df_timing_effect_sum
+) %>%
+  mutate(
+    var = factor(
+      var,
+      levels = c(
+        "Realized EF engagement frequency",
+        "Capacity K(t)",
+        "Cumulative extra EF engagement",
+        "Capacity lead relative to baseline"
+      )
+    ),
+    condition = factor(
+      condition,
+      levels = c("No intervention", "Early reward boost", "Late reward boost")
+    )
+  )
+
+timing_shade <- tibble(
+  condition = c("Early reward boost", "Late reward boost"),
+  xmin = c(3.0, 10.0),
+  xmax = c(5.0, 12.0),
+  ymin = -Inf,
+  ymax = Inf
+)
+
+ggplot(df_timing_plot, aes(year, mean, color = condition, fill = condition)) +
+  geom_rect(
+    data = timing_shade,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = condition),
+    inherit.aes = FALSE,
+    alpha = 0.08,
+    color = NA
+  ) +
+  geom_hline(yintercept = 0, linewidth = 0.25, color = "gray45") +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.12, color = NA) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~ var, ncol = 1, scales = "free_y") +
+  theme_result() +
+  labs(
+    title = "Reward timing changes accumulated engagement and developmental lead",
+    subtitle = "Raw trajectories show what changes; cumulative panels show the intervention-specific consequences",
+    x = "Developmental time since model start (years)",
+    y = NULL,
+    color = NULL,
+    fill = NULL
+  )
+```
+
 
 <!-- # Figure 1B: Developmental Improvements -->
 
