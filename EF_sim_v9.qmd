@@ -93,6 +93,55 @@ end
 style LEGEND fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1.2px,rx:8,ry:8
 ```
 
+
+
+
+# Removing $K$
+
+```{mermaid}
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, system-ui, Arial"}}}%%
+flowchart LR
+
+classDef fast fill:#E8F4FF,stroke:#1E6FB9,stroke-width:1.5px,color:#0B2A3D;
+classDef slow fill:#FFF2CC,stroke:#B07D00,stroke-width:1.5px,color:#3D2B00;
+classDef derived fill:#F3E8FF,stroke:#6B21A8,stroke-width:1.5px,color:#2E1065;
+classDef utility fill:#E6FFFA,stroke:#0F766E,stroke-width:1.5px,color:#042F2E;
+classDef param fill:#F3F4F6,stroke:#6B7280,stroke-width:1.2px,color:#111827,stroke-dasharray: 4 3;
+
+linkStyle default stroke:#93A1AA,stroke-width:1.2px;
+
+subgraph MAIN[" "]
+direction LR
+
+V(["V(t): learned value"]):::slow --> U{{Utility}}:::utility
+C(["C(t): subjective effort cost"]):::slow --> U
+X[["extra_cost(t): stress/context"]]:::param --> U
+
+U --> E(["E(t): EF engagement / performance"]):::fast
+
+E --> Rexp([Reward signal]):::derived
+p[["p_reward(t) & reward_mag"]]:::param --> Rexp
+Rexp -->|"updates learned value (+)"| V
+
+Cbase[["baseline cost level + mean reversion"]]:::param --> C
+
+A[["age/developmental trend"]]:::param --> E
+
+end
+style MAIN fill:transparent,stroke:transparent
+
+subgraph LEGEND["How to read nodes"]
+direction TB
+L1(["FAST state / outcome (t)"]):::fast
+L2(["SLOW state (t)"]):::slow
+L3([Derived quantity]):::derived
+L4[["Parameter / input"]]:::param
+end
+style LEGEND fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1.2px,rx:8,ry:8
+```
+
+
+
 ## Fast Process: EF Engagement Propensity
 
 At each moment $t$, the agent computes a propensity of engaging EF:
