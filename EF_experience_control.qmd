@@ -103,7 +103,7 @@ $$
 A_t=0 \quad \text{do not engage EF}.
 $$
 
-Rather than solving over a continuous range of control signals, we model the difference in expected control value between engaging and not engaging.
+Rather than solving over a continuous range of control signals, we reduce the problem to a binary choice: engage EF or do not engage EF. We track a single net value for engaging EF relative to not engaging, which is treated as the baseline.
 
 ## Learned Value of Control (LVOC): learning from experience
 
@@ -148,15 +148,17 @@ $$
 
 A child may become better at a practiced task while requiring less control to perform it.
 
-The practice-related cost rule can be rewritten in a more intuitive way. Instead of tracking how subjective effort cost decreases, we can equivalently track how much practice-related improvement has accumulated. In this representation, engaging EF increases a bounded practice state, with progressively smaller gains as the child approaches the maximum amount of practice-related improvement. This does not add a new mechanism; it is simply another way of writing the same cost dynamics. The resulting process is similar in spirit to LEVC, where practice increases task-specific automaticity, but our model does not explicitly model automaticity or task performance. We therefore interpret this state more generally as accumulated practice or learned efficiency.
+The practice-related cost rule below can also be rewritten in a more intuitive way. Instead of tracking only how subjective effort cost decreases, we can equivalently track how much **practice-related improvement** has accumulated. In that representation, engaging EF increases a bounded practice state, with progressively smaller gains as the child approaches the maximum amount of practice-related improvement. This is not a new mechanism; it is simply another way of writing the same cost dynamics.
+
+This is similar in spirit to LEVC, where practice increases task-specific automaticity, but our model does not explicitly model automaticity or task performance. We therefore interpret the corresponding state more generally as accumulated practice or learned efficiency rather than claiming that it is automaticity itself.
 
 ## Empirical precedent for learned control allocation
 
-Bustamante et al. showed that learned stimulus-control associations can generalize and lead participants to exert control even when that amount of control is no longer required.
+Bustamante et al. used a Stroop task in which participants learned through reward which stimulus features predicted that using the more control-demanding response would pay off. When those features later appeared in new combinations, participants carried that learning over and sometimes chose the more effortful control response even when it was no longer the rewarded option.
 
 Reference: [Bustamante, Lieder, Musslick, Shenhav, & Cohen (2021), *Learning to Overexert Cognitive Control in a Stroop Task*](https://doi.org/10.3758/s13415-020-00845-x).
 
-This does not establish our developmental cost-learning mechanism directly, but it supports the broader premise that control allocation itself can become experience-dependent and persistent.
+This provides evidence that the **decision to engage cognitive control** can be shaped by past experience and generalize to later situations. It does not directly test our proposed practice-to-lower-effort mechanism.
 
 # What is new here?
 
@@ -176,18 +178,18 @@ At each episode, the child implicitly evaluates:
 
 > **Is engaging EF worth it right now?**
 
-That decision depends on two slowly learned quantities:
+That decision depends on two slowly changing, experience-dependent quantities:
 
-- \(V(t)\): how much engaging EF is expected to pay off;
-- \(C(t)\): how effortful engaging EF is expected to be.
+- $V(t)$: how much engaging EF is expected to pay off;
+- $C(t)$: how effortful engaging EF currently feels.
 
-Temporary context, such as acute stress, can also make engagement less attractive in the moment. Together, these determine the **net value of engaging EF**, which sets the child's likelihood of engaging, \(\pi(t)\). The actual engagement decision, \(A(t)\), is stochastic.
+Temporary context, such as acute stress, can also make engagement less attractive in the moment. Together, these determine the **net value of engaging EF**, which sets the child's likelihood of engaging, $\pi(t)$. The actual engagement decision, $A(t)$, is probabilistic.
 
-What happens next feeds back into future decisions. The reward environment determines how often engagement actually pays off, and experienced outcomes update \(V(t)\). At the same time, engaging EF provides practice, which can gradually make future engagement easier by lowering \(C(t)\).
+What happens next feeds back into future decisions. The reward environment determines how often engagement actually pays off, and experienced outcomes update $V(t)$. At the same time, engaging EF provides practice, which can gradually make future engagement easier by lowering $C(t)$.
 
 Thus, the model contains two experience-dependent feedback pathways:
 
-\[
+$$
 \text{engage EF}
 \rightarrow
 \text{learn whether it pays off}
@@ -195,11 +197,11 @@ Thus, the model contains two experience-dependent feedback pathways:
 V(t)
 \rightarrow
 \text{future engagement},
-\]
+$$
 
 and
 
-\[
+$$
 \text{engage EF}
 \rightarrow
 \text{practice / learned efficiency}
@@ -207,9 +209,9 @@ and
 C(t)\downarrow
 \rightarrow
 \text{future engagement}.
-\]
+$$
 
-**Colors indicate the role of each component:** orange = slow learned states; green = momentary decision value; blue = fast engagement process; purple = experienced outcome; dashed gray = external context or environment.
+**Colors indicate the role of each component:** orange = slow experience-dependent states; green = momentary decision value; blue = fast engagement process; purple = experienced outcome; dashed gray = external context or environment.
 
 ```{mermaid}
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, system-ui, Arial"}}}%%
@@ -223,8 +225,8 @@ classDef context fill:#F3F4F6,stroke:#6B7280,stroke-width:1.2px,color:#111827,st
 
 linkStyle default stroke:#93A1AA,stroke-width:1.2px;
 
-V(["V(t): learned value<br/>How much does EF usually pay off?"]):::slow
-C(["C(t): learned effort cost<br/>How hard does engaging EF feel?"]):::slow
+V(["V(t): learned expected payoff<br/>How much does EF usually pay off?"]):::slow
+C(["C(t): effective effort cost<br/>How hard does engaging EF feel?"]):::slow
 X[["Temporary context / stress"]]:::context
 
 U{{"Net value of engaging EF"}}:::decision
@@ -235,21 +237,20 @@ A(["A(t): engage EF or not"]):::fast
 ENV[["Reward environment<br/>How often does EF pay off?"]]:::context
 R(["Experienced outcome"]):::outcome
 
-V -->|"increases"| U
-C -->|"decreases"| U
-X -->|"temporarily decreases"| U
+V -->|"raises"| U
+C -->|"lowers"| U
+X -->|"temporarily lowers"| U
 
 U --> P
 P --> A
 
 A -->|"creates experience"| R
 ENV -->|"shapes payoff"| R
-
 R -->|"learn whether EF pays off"| V
 A -->|"practice makes future engagement easier"| C
 ```
 
-The model separates a **propensity** from an **actual decision**:
+The model separates a **likelihood** from an **actual decision**:
 
 $$
 \pi_t = \text{probability of engaging EF}
@@ -258,17 +259,17 @@ $$
 and
 
 $$
-A_t \in \{0,1\} = \text{actual engagement on that episode}.
+A_t \in \{0,1\} = \text{whether EF is actually engaged on that episode}.
 $$
 
-Learning occurs from the actual experience $A_t$, not from a fractional expected engagement value. This is important for the developmental question because two initially identical children can receive different sequences of engagement and reward outcomes simply through stochastic experience.
+Learning occurs from the actual experience $A_t$, not from a fractional expected engagement value. This distinction matters for the developmental question because two initially identical children can receive different sequences of engagement and reward outcomes simply by chance.
 
 ## 1. Fast control decision
 
-For child $i$ at episode $t$, define the difference in expected value between engaging and not engaging EF as
+For child $i$ at episode $t$, define the **net value of engaging EF** as
 
 $$
-\Delta \widehat{\mathrm{EVC}}_{i,t}
+D_{i,t}
 =
 V_{i,t}
 -
@@ -280,16 +281,18 @@ $$
 where:
 
 - $V_{i,t}$ is the learned expected payoff of engaging EF;
-- $C_{i,t}$ is the subjective effort cost;
-- $X_{i,t}$ is temporary contextual cost, such as acute stress.
+- $C_{i,t}$ is the effective subjective effort cost;
+- $X_{i,t}$ is a temporary contextual cost, such as acute stress.
 
-We map this value difference onto a probability of engagement:
+Thus, larger $D_{i,t}$ means that engaging EF currently looks more worthwhile; smaller $D_{i,t}$ means that the expected payoff is less favorable relative to effort and context.
+
+We map this net value onto a probability of engagement:
 
 $$
 \pi_{i,t}
 =
 \sigma\left(
-\frac{\Delta \widehat{\mathrm{EVC}}_{i,t}}{\tau}
+\frac{D_{i,t}}{\tau}
 \right),
 $$
 
@@ -299,7 +302,7 @@ $$
 \sigma(x)=\frac{1}{1+e^{-x}}.
 $$
 
-Actual engagement is stochastic:
+Actual engagement is probabilistic:
 
 $$
 A_{i,t}
@@ -307,41 +310,47 @@ A_{i,t}
 \mathrm{Bernoulli}(\pi_{i,t}).
 $$
 
-The temperature parameter $\tau$ controls how sharply value differences translate into behavior.
+The temperature parameter $\tau$ controls how sharply differences in net value translate into behavior.
 
 ::: {.callout-note}
-## Relation to canonical EVC
+## Relation to the original EVC framework
 
-This is not the full EVC optimization problem. It is a binary stochastic simplification in which the alternative "do not engage" option is treated as the reference level.
+The model keeps the basic EVC idea that control is more likely to be engaged when its expected benefits outweigh its costs, but simplifies the decision to two options: **engage EF** or **do not engage EF**. We explicitly model the net value of engaging EF and treat not engaging as the baseline.
 
-A later extension could make the alternative option explicit and learn the values of both engaging and not engaging EF.
+A richer extension could assign and learn separate values for both options.
 :::
 
 ## 2. Experienced reward
 
-If EF is engaged, it can pay off with probability $p_{i,t}$:
+Both the engagement decision and the payoff outcome are binary. The engagement variable is
+
+$$
+A_{i,t}\in\{0,1\},
+$$
+
+and the payoff indicator is
 
 $$
 Y_{i,t}
 \sim
-\mathrm{Bernoulli}(p_{i,t}).
+\mathrm{Bernoulli}(p_{i,t}),
 $$
 
-The experienced reward is
+where $Y_{i,t}=1$ means that engaging EF pays off on that episode and $Y_{i,t}=0$ means that it does not. The experienced reward is
 
 $$
 R_{i,t}
 =
-A_{i,t}Y_{i,t}R,
+A_{i,t}Y_{i,t}r,
 $$
 
-where $R$ is reward magnitude.
+where $r>0$ is the magnitude of the payoff. Therefore, the child receives $r$ only when EF is both engaged ($A_{i,t}=1$) and rewarded ($Y_{i,t}=1$); otherwise the experienced reward is $0$.
 
-If EF is not engaged, the agent receives no new evidence about the payoff from engaging EF in this minimal version.
+If EF is not engaged, $V_{i,t}$ is not updated. In this minimal model, the child learns about the payoff of engaging EF only from occasions on which EF is actually engaged. The model therefore does not include counterfactual learning about what would have happened had the child engaged EF, or learning from observing others.
 
 ## 3. Learned expected payoff
 
-We use a simple delta-learning rule:
+We use a standard **delta-learning rule**, in which an expectation is updated according to the prediction error between what was experienced and what was expected:
 
 $$
 V_{i,t+1}
@@ -354,13 +363,13 @@ R_{i,t}-V_{i,t}
 \right).
 $$
 
-So:
+Here, $R_{i,t}-V_{i,t}$ is the prediction error. Thus:
 
-- successful engagement can increase learned value;
-- unsuccessful engagement can decrease learned value;
-- not engaging produces no direct value update.
+- rewarded engagement can increase learned value;
+- unrewarded engagement can decrease learned value;
+- if EF is not engaged, $A_{i,t}=0$ and $V_{i,t+1}=V_{i,t}$.
 
-This is an LVOC-inspired simplification, not a reproduction of the full LVOC learning rule.
+This learning rule is inspired by LVOC's idea that the value of cognitive control can be learned from experience. However, we use a much simpler delta-learning rule that tracks only the expected payoff of engaging EF, rather than LVOC's richer feature-based representation of different control options.
 
 ## 4. Practice-dependent effective effort cost
 
@@ -385,22 +394,16 @@ Thus:
 - not engaging EF does not directly increase cost;
 - the size of the practice effect shrinks as there is less remaining room for improvement.
 
-### The cost rule can be represented as bounded practice accumulation
+### The same cost rule can be written as accumulated practice
 
-The main theoretical concern with this equation is whether we are simply *assuming* that engagement lowers cost. It helps to reparameterize it.
+The equation above tracks how effort cost falls with practice. The same mechanism can be written in a more intuitive way by tracking **how much of the possible practice-related improvement has accumulated**. This is only a change in representation; it does not add another process to the model.
 
-Let
-
-$$
-H_C=C_0-C_{\min}
-$$
-
-denote the initial amount of cost reduction that is available through practice, and define a normalized practice/learned-efficiency state
+Define a practice/learned-efficiency state as the proportion of the possible practice-related cost reduction that has already occurred:
 
 $$
 L_{i,t}
 =
-\frac{C_0-C_{i,t}}{H_C}.
+\frac{C_0-C_{i,t}}{C_0-C_{\min}}.
 $$
 
 Then $L=0$ corresponds to the initial effort level and $L=1$ corresponds to the practice limit $C_{\min}$.
@@ -433,10 +436,10 @@ C_{i,t}
 =
 C_{\min}
 +
-H_C(1-L_{i,t}).
+(C_0-C_{\min})(1-L_{i,t}).
 $$
 
-So the same reduced-form dynamics can be represented in two mathematically equivalent ways:
+So the same practice mechanism can be written in two mathematically equivalent ways:
 
 $$
 \text{practice}
@@ -444,70 +447,81 @@ $$
 C_t\downarrow
 $$
 
-or
+or, using the alternative practice state $L_t$,
 
 $$
 \text{practice}
 \rightarrow
-L_t\uparrow
-\rightarrow
-\text{effective effort required later}\downarrow.
+L_t\uparrow.
 $$
 
-The second representation gives the state a possible **practice/learned-efficiency interpretation** and is close in spirit to LEVC. LEVC assumes that automaticity increases with task experience and that greater automaticity allows equal performance with less control. Our model differs in two important ways:
+These are **not two separate psychological processes**. $L_t$ is calculated directly from $C_t$, so knowing one determines the other. The $L_t$ representation is useful because it makes the practice interpretation intuitive: repeated engagement accumulates practice, but the amount of further improvement becomes smaller as $L_t$ approaches 1.
 
-1. LEVC's illustrative learning rule is linear in accumulated task trials, whereas we use a **bounded, saturating** process because we iterate it over a long developmental horizon.
-2. LEVC explicitly maps automaticity and continuous control intensity onto task accuracy. We collapse that relationship into a single **effective effort-cost state** because the current outcome is engagement propensity, not task performance.
+This is close in spirit to LEVC, which proposes that task experience can increase automaticity and thereby reduce the amount of control needed for successful performance. Our model is simpler in two ways:
 
-For the engagement-only model, adding both $C_t$ and $L_t$ would therefore duplicate the same state. A separate automaticity state becomes necessary only if we later model **observed EF performance** explicitly.
+1. We use a **bounded, saturating** practice process because the model is run over a long developmental horizon.
+2. We do not separately model automaticity, control intensity, and task accuracy. The current model asks only whether EF is engaged, so practice-related improvement is represented through the single effort-cost state $C_t$.
+
+For the current engagement model, we therefore keep $C_t$ as the primary state and treat $L_t$ only as an alternative way of describing the same practice-related change. A separate automaticity or skill state would become useful if we later wanted to model **how well the child performs an EF task**, in addition to whether the child engages EF.
 
 ::: {.callout-important}
-## What $C_t$ means in the current model
+## How practice is represented in the current model
 
-$C_t$ should not be read as a direct reinforcement-learning estimate of "how effortful the last attempt felt."
+Reward experience and practice affect two different learned quantities.
 
-It is a **reduced-form effective effort cost** that can decrease through accumulated practice. Reward outcomes update $V_t$; practice history changes $C_t$.
+- $V_t$ represents **how worthwhile engaging EF is expected to be**. It is updated from experienced reward outcomes.
+- $C_t$ represents **how effortful engaging EF currently is**. It is not learned from an explicit observation of how effortful the previous attempt felt. Instead, the model assumes that each occasion of EF engagement provides practice, which gradually lowers $C_t$ toward $C_{\min}$.
 
-This distinction matters because the developmental result turns out to depend much more strongly on the practice pathway than on value learning alone.
+Thus, reward experience changes whether EF seems **worthwhile**, whereas practice changes how **effortful** EF feels.
 :::
 
-The reinforcing loop is
+## How current engagement shapes future engagement
+
+Current engagement can affect later engagement through two experience-dependent pathways.
+
+**1. Practice pathway**
+
+When EF is engaged, the child gets practice. Repeated practice gradually lowers the effective effort cost of engaging EF, which makes future engagement more likely:
 
 $$
-A_t\uparrow
+A_t=1
 \rightarrow
-L_{t+1}\uparrow
+\text{practice}
 \rightarrow
 C_{t+1}\downarrow
 \rightarrow
-\pi_{t+1}\uparrow
-\rightarrow
-A_{t+1}\uparrow.
+\pi_{t+1}\uparrow.
 $$
 
-Together with value learning:
+This is a reinforcing pathway: engaging EF now can make EF easier to engage later. A higher $\pi_{t+1}$ makes later engagement more likely, although the actual decision remains probabilistic.
+
+**2. Value-learning pathway**
+
+Engaging EF also gives the child an opportunity to observe whether doing so pays off:
 
 $$
-A_t
+A_t=1
 \rightarrow
-R_t
+\text{experienced reward }R_t
 \rightarrow
 V_{t+1}
 \rightarrow
 \pi_{t+1}.
 $$
 
+If the payoff is better than expected, $V_t$ increases and future engagement becomes more likely. If the payoff is worse than expected, $V_t$ decreases and future engagement becomes less likely. Unlike the practice pathway, this pathway is therefore not always reinforcing in the positive direction.
+
+Together, the two pathways capture different consequences of experience: **practice changes how effortful EF feels, while reward outcomes change how worthwhile EF seems**. Both can feed back into the likelihood of engaging EF on later occasions.
+
 # Why differentiation grows and then weakens
 
-The simulations are easier to interpret if we first write the feedback in terms of one quantity.
-
-Ignoring temporary context for the moment, define
+The simulations are easier to interpret if we first combine learned payoff and learned effort cost into one quantity. Ignoring temporary context for the moment, define
 
 $$
 D_t=V_t-C_t.
 $$
 
-$D_t$ is the learned net advantage of engaging EF before the logistic decision rule is applied:
+$D_t$ is the **net value of engaging EF** before the logistic decision rule is applied:
 
 $$
 \pi_t
@@ -517,93 +531,62 @@ $$
 \right).
 $$
 
-Under a stationary reward environment with reward probability $p$,
+Suppose for now that the reward environment is stable, so the probability that EF engagement pays off remains constant at $p$. If the reward magnitude is $r$, then $pr$ is the **average payoff available when EF is engaged**. It is not a hard upper bound on $V_t$; rather, it is the long-run value toward which reward learning tends on average in a stable environment.
+
+We can then ask how much each learned quantity is expected to change from one episode to the next. Because engagement decisions and reward outcomes are probabilistic, these equations describe the **average expected change**, not what must happen on every individual episode:
 
 $$
-\mathbb{E}[\Delta V_t\mid V_t,C_t]
+\mathbb{E}[V_{t+1}-V_t\mid V_t,C_t]
 =
-\alpha_V\pi_t(pR-V_t)
+\alpha_V\pi_t(pr-V_t)
 $$
 
 and
 
 $$
-\mathbb{E}[\Delta C_t\mid V_t,C_t]
+\mathbb{E}[C_{t+1}-C_t\mid V_t,C_t]
 =
 -\alpha_C\pi_t(C_t-C_{\min}).
 $$
 
-Therefore,
+Since $D_t=V_t-C_t$,
 
 $$
 \boxed{
-\mathbb{E}[\Delta D_t\mid V_t,C_t]
+\mathbb{E}[D_{t+1}-D_t\mid V_t,C_t]
 =
 \pi_t
-\left[
-\alpha_V(pR-V_t)
+\underbrace{\left[
+\alpha_V(pr-V_t)
 +
 \alpha_C(C_t-C_{\min})
-\right].
+\right]}_{\text{remaining potential for reward learning and practice}}
 }
 $$
 
-Define the term in brackets as the remaining **learning headroom**:
+The two terms inside the brackets have a simple interpretation:
 
-$$
-H_t
-=
-\alpha_V(pR-V_t)
-+
-\alpha_C(C_t-C_{\min}).
-$$
+- $pr-V_t$ indicates how far the child's current expected payoff is below the average payoff available in the environment;
+- $C_t-C_{\min}$ indicates how much further practice could still reduce the effective effort cost.
 
-When
-
-$$
-V_t<pR
-\qquad\text{and}\qquad
-C_t>C_{\min},
-$$
-
-we have $H_t>0$. A child who happens to have slightly larger $D_t$ has a larger engagement probability $\pi_t$, and therefore receives the value-learning and practice updates more often:
+Early in development, there may therefore be substantial room for both reward learning and practice-related improvement. A child who happens to have a somewhat higher $D_t$ is more likely to engage EF, and engaging creates more opportunities for both kinds of updating:
 
 $$
 D_t\uparrow
 \Rightarrow
 \pi_t\uparrow
 \Rightarrow
-\text{more updating}
-\Rightarrow
-D_{t+1}\uparrow.
+\text{more opportunities for reward learning and practice}.
 $$
 
-This is the reinforcing mechanism that can generate developmental differentiation in the model.
-
-Importantly, the equation does **not** imply that any child who is slightly ahead must deterministically move farther ahead. A higher $\pi_t$ creates more opportunities for learning and practice, but a child who is farther along can also have less remaining headroom. The simulations therefore test whether the reinforcing difference in **learning opportunity** is strong enough to produce population-level differentiation under a given parameterization.
-
-The same equation also explains why the differentiation is self-limiting. As learning accumulates,
-
-$$
-V_t\rightarrow pR
-\qquad\text{and}\qquad
-C_t\rightarrow C_{\min},
-$$
-
-so
-
-$$
-H_t\rightarrow0.
-$$
-
-The reinforcing advantage of being slightly ahead therefore becomes weaker as there is less left to learn.
+This can amplify chance differences over a developmental period. It does **not** mean that a child who is slightly ahead must keep moving farther ahead forever. As $V_t$ approaches $pr$ and $C_t$ approaches $C_{\min}$, there is progressively less left to learn or improve, so this reinforcing effect becomes weaker.
 
 ::: {.callout-note}
-## What this does and does not prove
+## What this does and does not imply
 
-This argument identifies the **local reinforcing mechanism in learning opportunity**. It does not imply that every possible parameterization must generate large or persistent individual differences.
+The equation identifies a mechanism through which chance differences in experience can become temporarily self-reinforcing. It does not imply that every parameter setting produces large or permanent individual differences.
 
-How much differentiation appears depends on the learning rates, decision temperature, initial net value, available practice headroom, and time horizon. We test that dependence explicitly in the replicated parameter analysis below.
+How much differentiation appears depends on the learning rates, decision temperature, initial net value, the amount by which practice can still reduce effort cost, and the developmental horizon. We test that dependence explicitly in the replicated parameter analysis below.
 :::
 
 ## Common long-run regime
@@ -611,7 +594,7 @@ How much differentiation appears depends on the learning rates, decision tempera
 The mean deterministic tendencies are toward
 
 $$
-V^*=pR
+V^*=pr
 $$
 
 and
@@ -626,14 +609,14 @@ $$
 \pi^*
 =
 \sigma\left(
-\frac{pR-C_{\min}}{\tau}
+\frac{pr-C_{\min}}{\tau}
 \right).
 $$
 
-This common regime applies when children share the same stationary reward environment. If reward probability differs persistently across children, $p_i$, then
+This common regime applies when children share the same stable reward environment. If reward probability differs persistently across children, $p_i$, then
 
 $$
-V_i^*=p_iR,
+V_i^*=p_ir,
 \qquad
 C_i^*=C_{\min},
 $$
@@ -644,25 +627,25 @@ $$
 \pi_i^*
 =
 \sigma\left(
-\frac{p_iR-C_{\min}}{\tau}
+\frac{p_ir-C_{\min}}{\tau}
 \right).
 $$
 
 So the model distinguishes two sources of developmental differentiation:
 
-- **stochastic history under a shared environment** can make initially identical children diverge over a developmental horizon;
-- **persistent environmental differences** can additionally anchor different long-run mean engagement levels.
+- **chance differences in experience under the same environment** can make initially identical children diverge over a developmental horizon;
+- **persistent environmental differences** can additionally maintain different long-run mean engagement levels.
 
 
-Because the simulations retain stochastic choices and reward outcomes with a constant learning rate, individual trajectories need not collapse to a single point. They can continue to fluctuate around this common regime.
+Because choices and reward outcomes remain probabilistic with a constant learning rate, individual trajectories need not collapse to a single point. They continue to fluctuate around their relevant long-run mean regime.
 
 The stronger developmental questions are therefore:
 
-1. **Finite developmental differentiation:** can early stochastic experience create large differences over a developmentally relevant horizon?
-2. **Rank persistence:** do the same children remain relatively high or low, or does that ordering eventually disappear?
-3. **Environmental anchoring:** can small persistent differences in reward environments stabilize which children remain relatively high or low?
+1. **Developmental differentiation:** can chance differences in experience cause initially identical children to develop substantial differences in EF engagement over a developmentally relevant period, even when they share the same environment?
+2. **Rank persistence:** once children have begun to differ, do those who are relatively high or low in EF engagement tend to retain their relative position over time, or does that ordering eventually disappear?
+3. **Environmental stabilization:** can small persistent differences in reward environments stabilize which children remain relatively high or low?
 
-This distinction prevents us from calling finite-horizon differentiation a set of permanently distinct asymptotic states.
+This distinction prevents us from calling developmental-horizon differentiation a set of permanently distinct asymptotic states.
 
 # Model ladder
 
@@ -685,11 +668,11 @@ M3 is included as a diagnostic extension because Yuko previously asked whether a
 
 These are qualitative simulations, not fitted developmental estimates.
 
-- Time is measured in **developmental episodes**, not literal weeks or years.
-- For figures, time is normalized to $[0,1]$.
+- Time in the model represents repeated opportunities to engage EF, rather than literal weeks or years.
+- Figures show the literal simulation episode $t$; time is not normalized.
 - All agents have identical starting $V_0$ and $C_0$ in the primary analyses.
 - All agents have identical learning parameters.
-- Stochasticity comes from actual engagement decisions and reward outcomes.
+- Chance differences arise from the realized engagement decisions and reward outcomes.
 - We later introduce a *very small* between-child difference in reward probability as an environmental heterogeneity test.
 
 ::: {.callout-warning}
@@ -697,6 +680,23 @@ These are qualitative simulations, not fitted developmental estimates.
 
 The default parameters below are provisional. They are chosen to keep the system away from immediate floor/ceiling behavior so that the qualitative dynamics are visible, not as empirical estimates.
 :::
+
+| Quantity | Default | Meaning |
+|---|---:|---|
+| $N$ | 800 | Number of simulated children in the default population |
+| $T$ | 1500 | Number of developmental episodes |
+| $V_0$ | 0.577 | Initial learned expected payoff from engaging EF |
+| $C_0$ | 0.987 | Initial effective effort cost of engaging EF |
+| $\tau$ | 0.163 | Decision temperature; larger values make engagement less tightly determined by $D_t=V_t-C_t-X_t$ |
+| $p$ | 0.591 | Probability that EF engagement pays off in the default environment |
+| $r$ | 1.150 | Reward magnitude when engagement pays off |
+| $\alpha_V$ | 0.0244 | Value-learning rate |
+| $\alpha_C$ | 0.00263 | Practice-related cost-reduction rate |
+| $C_{\min}$ | 0.459 | Lower limit on effective effort cost under practice |
+| $C_{\mathrm{set}}$ | 0.987 | Baseline cost level used only in optional M3 |
+| $\eta_C$ | 0.0008 | Passive cost-stabilization rate used only in optional M3 |
+
+$N$ and $T$ are simulation-design choices rather than psychological parameters. The remaining values specify the provisional default model used for the illustrative simulations.
 
 ```{r}
 #| label: setup
@@ -747,6 +747,10 @@ clip <- function(x, lo = 0, hi = 1) {
   pmin(pmax(x, lo), hi)
 }
 
+episode_at_fraction <- function(T, fraction) {
+  round(fraction * (T - 1)) + 1L
+}
+
 default_pars <- list(
   N = 800,
   T = 1500,
@@ -794,7 +798,7 @@ condition_cols <- c(
   "Early support" = "#2A9D8F",
   "Later support" = "#D96C4A",
   "Identical environment" = "#4C78A8",
-  "Tiny reward differences" = "#B56576"
+  "Persistent reward differences (SD = .02)" = "#B56576"
 )
 
 snapshot_cols <- c(
@@ -829,13 +833,6 @@ theme_result <- function(base_size = 14) {
     )
 }
 
-scale_dev_time <- function() {
-  scale_x_continuous(
-    limits = c(0, 1),
-    breaks = seq(0, 1, by = 0.25),
-    expand = expansion(mult = c(0.005, 0.005))
-  )
-}
 ```
 
 
@@ -902,8 +899,8 @@ simulate_population <- function(
 
     p_t <- clip(p_i + p_reward_shift[tt])
 
-    delta_evc <- V - C - extra_cost[tt]
-    pi_engage <- plogis(delta_evc / tau)
+    decision_value <- V - C - extra_cost[tt]
+    pi_engage <- plogis(decision_value / tau)
 
     # Actual engagement decision.
     A <- as.integer(runif(N) < pi_engage)
@@ -916,7 +913,6 @@ simulate_population <- function(
       out[[k]] <- tibble(
         child_id = child_id,
         step = tt,
-        dev_time = (tt - 1) / (T - 1),
 
         p_reward_child = p_i,
         p_reward_used = p_t,
@@ -926,7 +922,7 @@ simulate_population <- function(
         C = C,
         effective_cost = C + extra_cost[tt],
 
-        delta_evc = delta_evc,
+        decision_value = decision_value,
         pi = pi_engage,
         A = A,
         reward = reward_observed
@@ -971,7 +967,7 @@ simulate_population <- function(
 
 population_summary <- function(df) {
   df %>%
-    group_by(model_label, dev_time) %>%
+    group_by(model_label, step) %>%
     summarize(
       mean_pi = mean(pi),
       sd_pi = sd(pi),
@@ -983,8 +979,12 @@ population_summary <- function(df) {
 }
 
 window_score <- function(df, lo, hi, label) {
+  T_end <- max(df$step)
+  lo_step <- episode_at_fraction(T_end, lo)
+  hi_step <- episode_at_fraction(T_end, hi)
+
   df %>%
-    filter(dev_time >= lo, dev_time <= hi) %>%
+    filter(step >= lo_step, step <= hi_step) %>%
     group_by(child_id) %>%
     summarize(
       score = mean(pi),
@@ -1021,17 +1021,23 @@ stability_table <- function(df) {
 
 development_metrics <- function(df) {
 
-  early <- df %>% filter(dev_time >= 0.05, dev_time <= 0.15)
-  late  <- df %>% filter(dev_time >= 0.85, dev_time <= 0.95)
+  T_end <- max(df$step)
+  early_lo <- episode_at_fraction(T_end, 0.05)
+  early_hi <- episode_at_fraction(T_end, 0.15)
+  late_lo <- episode_at_fraction(T_end, 0.85)
+  late_hi <- episode_at_fraction(T_end, 0.95)
+
+  early <- df %>% filter(step >= early_lo, step <= early_hi)
+  late  <- df %>% filter(step >= late_lo, step <= late_hi)
 
   early_sd <- early %>%
-    group_by(dev_time) %>%
+    group_by(step) %>%
     summarize(x = sd(pi), .groups = "drop") %>%
     summarize(x = mean(x, na.rm = TRUE)) %>%
     pull(x)
 
   late_sd <- late %>%
-    group_by(dev_time) %>%
+    group_by(step) %>%
     summarize(x = sd(pi), .groups = "drop") %>%
     summarize(x = mean(x, na.rm = TRUE)) %>%
     pull(x)
@@ -1051,10 +1057,12 @@ development_metrics <- function(df) {
 }
 
 get_snapshot <- function(df, target, label) {
+  target_step <- episode_at_fraction(max(df$step), target)
+
   df %>%
     group_by(child_id) %>%
     slice_min(
-      order_by = abs(dev_time - target),
+      order_by = abs(step - target_step),
       n = 1,
       with_ties = FALSE
     ) %>%
@@ -1103,9 +1111,14 @@ simulate_development_metrics_fast <- function(
   middle_child_n <- 0L
   late_child_n <- 0L
 
-  for (tt in seq_len(T)) {
+  early_lo <- episode_at_fraction(T, 0.05)
+  early_hi <- episode_at_fraction(T, 0.15)
+  middle_lo <- episode_at_fraction(T, 0.50)
+  middle_hi <- episode_at_fraction(T, 0.60)
+  late_lo <- episode_at_fraction(T, 0.85)
+  late_hi <- episode_at_fraction(T, 0.95)
 
-    dev_time <- (tt - 1) / (T - 1)
+  for (tt in seq_len(T)) {
 
     pi_engage <- plogis((V - C) / tau)
 
@@ -1117,7 +1130,7 @@ simulate_development_metrics_fast <- function(
 
     if (record_this) {
 
-      if (dev_time >= 0.05 && dev_time <= 0.15) {
+      if (tt >= early_lo && tt <= early_hi) {
         early_sum <- early_sum + sum(pi_engage)
         early_n <- early_n + N
         early_sd_sum <- early_sd_sum + sd(pi_engage)
@@ -1126,12 +1139,12 @@ simulate_development_metrics_fast <- function(
         early_child_n <- early_child_n + 1L
       }
 
-      if (dev_time >= 0.50 && dev_time <= 0.60) {
+      if (tt >= middle_lo && tt <= middle_hi) {
         middle_child_sum <- middle_child_sum + pi_engage
         middle_child_n <- middle_child_n + 1L
       }
 
-      if (dev_time >= 0.85 && dev_time <= 0.95) {
+      if (tt >= late_lo && tt <= late_hi) {
         late_sum <- late_sum + sum(pi_engage)
         late_n <- late_n + N
         late_sd_sum <- late_sd_sum + sd(pi_engage)
@@ -1186,11 +1199,11 @@ rank_percentile <- function(x) {
 # non-finite values. This is used before the main developmental figures.
 assert_plot_coverage <- function(
   df,
-  time_col = "dev_time",
+  time_col = "step",
   group_cols = character(0),
   value_cols = NULL,
-  expected_start = 0,
-  expected_end = 1,
+  expected_start = 1,
+  expected_end = default_pars$T,
   tolerance = 1e-6
 ) {
 
@@ -1295,7 +1308,7 @@ model_metrics <- bind_rows(
 #| fig-align: center
 
 nested_plot_df <- summary_models %>%
-  select(model_label, dev_time, mean_pi, sd_pi) %>%
+  select(model_label, step, mean_pi, sd_pi) %>%
   pivot_longer(
     cols = c(mean_pi, sd_pi),
     names_to = "measure",
@@ -1311,17 +1324,16 @@ nested_plot_df <- summary_models %>%
 
 ggplot(
   nested_plot_df,
-  aes(dev_time, value, color = model_label)
+  aes(step, value, color = model_label)
 ) +
   geom_line(linewidth = 1.05) +
   facet_wrap(~ measure, ncol = 1, scales = "free_y") +
   scale_color_manual(values = model_cols) +
-  scale_dev_time() +
   theme_result() +
   labs(
     title = "What does each mechanism add?",
     subtitle = "All agents start identically and share the same reward environment",
-    x = "Developmental time (normalized)",
+    x = "Developmental episode t",
     y = NULL,
     color = NULL
   )
@@ -1335,9 +1347,19 @@ knitr::kable(
   model_metrics %>%
     select(model_label, early_mean, late_mean, early_sd, late_sd, rho_middle_late),
   digits = 3,
+  col.names = c(
+    "Model",
+    "Early mean",
+    "Late mean",
+    "Early SD",
+    "Late SD",
+    "Middle-to-late rank persistence (Spearman rho)"
+  ),
   caption = "Developmental change, heterogeneity, and rank persistence by model"
 )
 ```
+
+The last column asks whether children who are relatively high or low in engagement during the **middle** of the simulated period tend to remain relatively high or low **later**. It is the Spearman rank correlation between each child's middle-stage and late-stage mean engagement propensity. With the default $T=1500$, the middle window is approximately $t=750$--$900$ and the late window is approximately $t=1275$--$1425$. A larger positive $\rho$ means stronger persistence of the children's relative ordering. M0 is `NA` because all children remain identical, so there is no between-child ranking to correlate.
 
 With the current provisional parameters, **EVC alone is flat**, as expected: there is no learning mechanism that could generate developmental change. Adding learned value produces some change, but the much larger shift appears after adding the practice feedback. In M2, children who happen to engage slightly more receive more opportunities both to update value and to reduce future subjective cost.
 
@@ -1356,7 +1378,7 @@ A_t\uparrow
 \pi_{t+1}\uparrow.
 $$
 
-This does **not** imply unlimited divergence. As value and cost approach the amounts left to learn, the feedback weakens.
+This does **not** imply unlimited divergence. As $V_t$ approaches the average payoff available in the environment and $C_t$ approaches $C_{\min}$, there is progressively less left to learn or improve, so the feedback weakens.
 
 # Result 2: Initially identical children differentiate over development
 
@@ -1370,7 +1392,7 @@ C_{i,0}=C_0,
 p_i=p.
 $$
 
-The only source of between-child differences is the stochastic sequence of (1) whether EF is actually engaged and (2) whether engagement pays off.
+The only source of between-child differences is chance variation in (1) whether EF is actually engaged and (2) whether engagement pays off. No between-child variation in engagement propensity is specified at baseline: because all children begin with the same $V_0$, $C_0$, and parameters, they also begin with the same $\pi_{i,0}$ and therefore $SD(\pi_{i,0})=0$. Any later between-child SD in engagement propensity is an **emergent outcome** of their different realized engagement and reward histories, not an input parameter.
 
 ```{r}
 #| label: run_identical_population
@@ -1389,7 +1411,7 @@ stability_identical <- stability_table(df_identical)
 
 ## Example individual trajectories
 
-A population summary can hide the fact that the model is producing genuinely different developmental paths. The next figure shows a small representative subset from the **identical-start, identical-environment** simulation.
+A population summary can hide the fact that the model is producing genuinely different developmental paths. The next figure shows 15 example children from the **identical-start, identical-environment** simulation. The labels "lower," "middle," and "higher late engagement" are assigned **after the simulation** according to each child's average engagement propensity during the late window: children in the lower, middle, and upper thirds are labeled accordingly. These groups are used only to select and color illustrative trajectories; they are not model inputs, and no high-, middle-, or low-engagement groups are specified in advance.
 
 ```{r}
 #| label: fig_identical_trajectories
@@ -1399,7 +1421,7 @@ A population summary can hide the fact that the model is producing genuinely dif
 #| message: false
 
 late_groups_identical <- df_identical %>%
-  filter(dev_time >= 0.85, dev_time <= 0.95) %>%
+  filter(step >= episode_at_fraction(max(step), 0.85), step <= episode_at_fraction(max(step), 0.95)) %>%
   group_by(child_id) %>%
   summarize(
     late_pi = mean(pi),
@@ -1443,7 +1465,7 @@ trajectory_df <- df_identical %>%
   )
 
 trajectory_mean <- df_identical %>%
-  group_by(dev_time) %>%
+  group_by(step) %>%
   summarize(
     mean_pi = mean(pi),
     .groups = "drop"
@@ -1457,30 +1479,33 @@ trajectory_cols <- c(
 
 ggplot(
   trajectory_df,
-  aes(dev_time, pi, group = child_id, color = late_group)
+  aes(step, pi, group = child_id, color = late_group)
 ) +
   geom_line(alpha = 0.55, linewidth = 0.70) +
   geom_line(
     data = trajectory_mean,
-    aes(dev_time, mean_pi),
+    aes(step, mean_pi),
     inherit.aes = FALSE,
     color = "black",
     linewidth = 1.15
   ) +
   scale_color_manual(values = trajectory_cols) +
-  scale_dev_time() +
   coord_cartesian(ylim = c(0, 1)) +
   theme_result() +
   labs(
     title = "Different developmental paths emerge from identical starts",
-    subtitle = "Same starting states and same reward environment; differences arise only from stochastic engagement and reward history",
-    x = "Developmental time (normalized)",
+    subtitle = "Same starting states and environment; differences arise only from chance differences in experience",
+    x = "Developmental episode t",
     y = "EF engagement propensity",
     color = NULL
   )
 ```
 
-Even when every child begins with the same parameters and the same reward environment, stochastic engagement and reward histories generate visibly different developmental paths. These differences are substantial over the developmental horizon, although the shared-environment long-horizon analysis below shows that their identities are not permanently fixed.
+Even when every child begins with the same parameters, the same initial engagement propensity, and the same reward environment, chance differences in engagement decisions and reward outcomes generate visibly different developmental paths.
+
+For visualization only, children are grouped **after the simulation** according to their average late-stage engagement propensity: lower third, middle third, or upper third. Five trajectories from each group are shown. These labels are therefore descriptive rather than model inputs; no high-, middle-, or low-engagement groups are specified in advance. Because the groups are defined by late engagement, their separation near the end of the figure is partly true by construction. The figure is intended to illustrate how different developmental paths can emerge from identical starting conditions, not to establish rank persistence. Persistence is evaluated separately below using rank correlations.
+
+These differences are substantial over the developmental horizon, although the shared-environment long-horizon analysis below shows that their identities are not permanently fixed.
 
 ## The population spreads out
 
@@ -1515,7 +1540,54 @@ ggplot(snapshots, aes(pi, color = snapshot)) +
   )
 ```
 
-The increase in dispersion is substantial over this developmental horizon. This establishes **heterogeneity**, but not yet permanent individual types.
+The increase in dispersion is substantial over this developmental horizon. The between-child spread in engagement propensity is generated by the model rather than imposed at baseline.
+
+<details>
+<summary><strong>How is the between-child SD in engagement propensity generated?</strong></summary>
+
+All children begin with the same $V_0$, $C_0$, parameters, and reward environment. They therefore also begin with the same engagement propensity,
+
+$$
+\pi_{i,0}
+=
+\sigma\!\left(\frac{V_0-C_0}{\tau}\right),
+$$
+
+so initially
+
+$$
+SD_i(\pi_{i,0})=0.
+$$
+
+The randomness enters through the actual engagement decision and reward outcome:
+
+$$
+A_{i,t}\sim\operatorname{Bernoulli}(\pi_{i,t}),
+\qquad
+Y_{i,t}\sim\operatorname{Bernoulli}(p).
+$$
+
+Thus, two children with exactly the same propensity can nevertheless have different experiences on a given episode: one may engage while the other does not, and among children who engage, one may be rewarded while another is not. Those different experiences update $V_{i,t}$ and $C_{i,t}$ differently, which then produces different propensities on later episodes.
+
+The reported between-child SD at episode $t$ is simply calculated from the propensities generated for the population:
+
+$$
+SD_i(\pi_{i,t})
+=
+\sqrt{
+\frac{1}{N-1}
+\sum_{i=1}^{N}
+\left(\pi_{i,t}-\bar{\pi}_t\right)^2
+}.
+$$
+
+It is therefore an **output of the model, not a free parameter**. Its magnitude depends on the learning and practice parameters ($\alpha_V$, $\alpha_C$), decision sensitivity ($\tau$), the reward environment ($p$ and reward magnitude), the starting states and practice floor, and how long chance differences in experience have had to accumulate.
+
+This between-child SD is different from the Bernoulli variance $\pi_{i,t}(1-\pi_{i,t})$. The latter describes uncertainty in whether one child engages on a particular episode; the former describes how far apart children's underlying engagement propensities have become.
+
+</details>
+
+This establishes **heterogeneity**, but not yet permanent individual types.
 
 ## Relative differences are moderately persistent
 
@@ -1535,6 +1607,8 @@ The rank correlations are moderate rather than close to 1. We therefore describe
 ### Rank-to-rank visualization
 
 The previous propensity-versus-propensity scatter was dominated by the fact that the whole population improves. A percentile plot isolates the question we actually care about: whether children preserve their relative position.
+
+A **rank percentile** describes where a child stands relative to the other children at the same developmental period, rather than their absolute engagement propensity. A value near 0 means the child is among the lowest in the population, 0.50 means roughly the middle, and a value near 1 means among the highest. For example, a rank percentile of 0.75 means that the child's engagement propensity is higher than that of about 75% of the other children.
 
 ```{r}
 #| label: fig_rank_stability
@@ -1573,20 +1647,248 @@ ggplot(scores_identical, aes(middle_rank, late_rank)) +
   )
 ```
 
-# Result 3: Persistent reward differences anchor later engagement differences
+Each point represents one child. The x-axis gives that child's relative rank during the middle stage, and the y-axis gives the same child's relative rank during the late stage. The dashed diagonal represents perfect rank preservation: a child on this line occupies the same relative position at both periods. Points above the line moved upward relative to other children, whereas points below the line moved downward.
 
-The developmental account does not require children's environments to be identical. It proposes that environments differ in whether engaging EF tends to pay off.
+The middle-to-late Spearman correlation summarizes this pattern. A value of about $\rho=0.62$ indicates **moderate rank persistence**: children who are relatively high in the middle tend to remain relatively high later, and children who are relatively low tend to remain relatively low, but there is substantial reshuffling. Because the axes use ranks rather than raw propensity, this comparison is not driven by the overall increase in engagement across the population.
 
-Here we introduce only a **small** persistent difference in reward probability:
 
-1. identical reward probability for everyone;
-2. a narrow distribution with $SD(p_i)=0.02$ around the same mean.
+### Do these differences last indefinitely?
 
-No other between-child parameters are changed.
+Result 2 shows that initially identical children can become meaningfully different over the main developmental simulation. A separate question is whether those differences remain tied to the same children forever when everyone continues to experience the **same** reward environment.
 
-### Long-run trajectories under persistent environmental differences
+To check this, we continue simulating the same initially identical children for four times longer than in the main simulation.
 
-The shared-environment simulation in Result 2 isolates differentiation generated by stochastic experience. We now ask what happens when children also experience a **small, persistent difference in how often engaging EF pays off**. The same narrow reward heterogeneity used in this section, $SD(p_i)=0.02$, is carried forward over a longer horizon.
+```{r}
+#| label: run_long_horizon
+#| echo: true
+
+T_long <- 4 * (default_pars$T - 1) + 1
+
+df_long <- simulate_population(
+  model = "value_cost",
+  N = 600,
+  T = T_long,
+  p_reward_sd = 0,
+  record_every = 10,
+  seed = 1400
+)
+```
+
+There are two useful questions.
+
+**1. How far apart are children at a given time?**
+
+```{r}
+#| label: fig_long_sd
+#| fig-width: 8.2
+#| fig-height: 4.2
+#| fig-align: center
+
+long_sd <- df_long %>%
+  group_by(step) %>%
+  summarize(sd_pi = sd(pi), .groups = "drop")
+
+ggplot(long_sd, aes(step, sd_pi)) +
+  geom_line(linewidth = 1.0) +
+  geom_vline(
+    xintercept = default_pars$T,
+    linetype = "dashed",
+    linewidth = 0.45
+  ) +
+  theme_result() +
+  labs(
+    title = "Between-child differences grow, then gradually decrease",
+    subtitle = "Dashed line marks the end of the main developmental simulation",
+    x = "Developmental episode t",
+    y = "Between-child SD in engagement propensity"
+  )
+```
+
+The population first spreads out, as shown in Result 2. Over a much longer period, that spread begins to decrease. Some variation remains because engagement and reward outcomes continue to be probabilistic.
+
+**2. Do the same children remain relatively high or low?**
+
+We take each child's average engagement near the end of the main developmental simulation and ask how strongly that ranking predicts the child's ranking later.
+
+```{r}
+#| label: rank_memory_long
+#| echo: true
+
+reference_rank_scores <- df_long %>%
+  filter(
+    step >= round(0.80 * (default_pars$T - 1)) + 1,
+    step <= round(0.95 * (default_pars$T - 1)) + 1
+  ) %>%
+  group_by(child_id) %>%
+  summarize(reference_score = mean(pi), .groups = "drop")
+
+memory_centers <- seq(0.90, 4.00, by = 0.20)
+memory_half_width <- 0.06
+
+rank_memory <- bind_rows(
+  lapply(memory_centers, function(center_i) {
+
+    center_step <- round(center_i * (default_pars$T - 1)) + 1
+    half_width_steps <- round(memory_half_width * (default_pars$T - 1))
+
+    later_scores <- df_long %>%
+      filter(
+        step >= center_step - half_width_steps,
+        step <= center_step + half_width_steps
+      ) %>%
+      group_by(child_id) %>%
+      summarize(later_score = mean(pi), .groups = "drop")
+
+    joined <- inner_join(
+      reference_rank_scores,
+      later_scores,
+      by = "child_id"
+    )
+
+    tibble(
+      episode = center_step,
+      rank_memory = cor(
+        joined$reference_score,
+        joined$later_score,
+        method = "spearman"
+      )
+    )
+  })
+)
+```
+
+```{r}
+#| label: fig_rank_memory_long
+#| fig-width: 8.2
+#| fig-height: 4.2
+#| fig-align: center
+
+ggplot(rank_memory, aes(episode, rank_memory)) +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  geom_line(linewidth = 1.0) +
+  geom_point(size = 1.6) +
+  coord_cartesian(ylim = c(-0.1, 1)) +
+  theme_result() +
+  labs(
+    title = "Earlier high/low rankings gradually lose predictive value",
+    x = "Developmental episode t",
+    y = "Spearman rank correlation with earlier ranking"
+  )
+```
+
+So under a completely shared environment, chance differences in experience can create substantial and fairly persistent developmental differences, but they do **not** permanently divide children into fixed high- and low-engagement groups. This is why Result 3 asks what changes when children experience small but persistent differences in how often EF pays off.
+
+
+# Result 3: Persistent reward differences make later engagement differences more stable
+
+Result 2 deliberately gave every child the same reward environment. In development, however, children may differ slightly and consistently in how often engaging EF pays off.
+
+We represent this by allowing the stable reward probability $p_i$ to vary across children while keeping all other between-child parameters identical.
+
+The amount of variation is not empirically estimated here. Rather than choosing one value and treating it as special, we test:
+
+$$
+SD(p_i)\in\{0,\ .01,\ .02,\ .04,\ .06\}.
+$$
+
+Here $SD(p_i)=0$ is the shared-environment case from Result 2. Larger values mean that children differ more in how often EF engagement tends to be rewarded.
+
+## Does more persistent environmental variation make rank differences more stable?
+
+For each value of $SD(p_i)$, we measure:
+
+1. **late between-child spread:** the SD of children's engagement propensities late in the simulation;
+2. **middle-to-late rank persistence:** whether children who are relatively high or low in the middle tend to remain relatively high or low later.
+
+The rank-persistence measure is the main outcome here. The late between-child SD is retained in the table as a descriptive check.
+
+```{r}
+#| label: reward_sd_sensitivity
+#| echo: true
+#| message: false
+
+reward_sd_grid <- c(0, 0.01, 0.02, 0.04, 0.06)
+
+reward_sd_sensitivity <- map_dfr(
+  reward_sd_grid,
+  function(sd_p) {
+
+    df_sd <- simulate_population(
+      model = "value_cost",
+      N = 1000,
+      p_reward_sd = sd_p,
+      seed = 601
+    )
+
+    metrics_sd <- development_metrics(df_sd)
+
+    tibble(
+      imposed_sd_p = sd_p,
+      late_sd_pi = metrics_sd$late_sd,
+      rho_middle_late = metrics_sd$rho_middle_late
+    )
+  }
+)
+
+reward_sd_sensitivity_display <- reward_sd_sensitivity %>%
+  transmute(
+    `Imposed SD(p_i)` = imposed_sd_p,
+    `Late SD in engagement propensity` = late_sd_pi,
+    `Middle-to-late rank persistence (Spearman rho)` = rho_middle_late
+  )
+
+knitr::kable(
+  reward_sd_sensitivity_display,
+  digits = 3,
+  caption = "Effect of persistent between-child differences in reward probability"
+)
+```
+
+```{r}
+#| label: fig_reward_sd_sensitivity_rank
+#| fig-width: 7.4
+#| fig-height: 4.7
+#| fig-align: center
+
+ggplot(
+  reward_sd_sensitivity,
+  aes(imposed_sd_p, rho_middle_late)
+) +
+  geom_line(linewidth = 1.0) +
+  geom_point(size = 2.4) +
+  coord_cartesian(ylim = c(0.60, 0.90)) +
+  theme_result() +
+  labs(
+    title = "Persistent reward differences make rank ordering more stable",
+    subtitle = "Middle-to-late Spearman rank correlation",
+    x = "Between-child SD in reward probability",
+    y = "Middle-to-late rank persistence"
+  )
+```
+
+As persistent differences in reward probability get larger, children's relative engagement rankings become more stable over time. The overall between-child spread also increases, but that is the more obvious consequence of imposing greater variation in $p_i$ and is therefore not the main result.
+
+The main point of this sensitivity analysis is that the increase in rank persistence is **gradual rather than specific to the illustrative choice $SD(p_i)=0.02$**.
+
+## Why can persistent reward differences matter in the long run?
+
+With a shared reward probability $p$, all children have the same long-run mean payoff target. With child-specific reward probabilities,
+
+$$
+V_i^*=p_i r,
+$$
+
+so children with different $p_i$ need not have the same long-run mean engagement propensity:
+
+$$
+\pi_i^*
+=
+\sigma\!\left(
+\frac{p_i r-C_{\min}}{\tau}
+\right).
+$$
+
+The next figure uses $SD(p_i)=0.02$ only as a **small illustrative condition**. It is one point on the sensitivity analysis above, not an empirically calibrated value.
 
 ```{r}
 #| label: fig_environment_long_trajectories
@@ -1604,10 +1906,7 @@ df_environment_long <- simulate_population(
   p_reward_sd = 0.02,
   record_every = 10,
   seed = 601
-) %>%
-  mutate(
-    time_multiple = (step - 1) / (default_pars$T - 1)
-  )
+)
 
 environment_groups <- df_environment_long %>%
   distinct(
@@ -1646,24 +1945,18 @@ trajectory_environment <- df_environment_long %>%
   ) %>%
   left_join(
     sampled_environment_children %>%
-      select(
-        child_id,
-        environment_group
-      ),
+      select(child_id, environment_group),
     by = "child_id"
   )
 
 environment_group_mean <- df_environment_long %>%
   left_join(
     environment_groups,
-    by = c(
-      "child_id",
-      "p_reward_child"
-    )
+    by = c("child_id", "p_reward_child")
   ) %>%
   group_by(
     environment_group,
-    time_multiple
+    step
   ) %>%
   summarize(
     mean_pi = mean(pi),
@@ -1679,7 +1972,7 @@ environment_cols <- c(
 ggplot(
   trajectory_environment,
   aes(
-    time_multiple,
+    step,
     pi,
     group = child_id,
     color = environment_group
@@ -1692,7 +1985,7 @@ ggplot(
   geom_line(
     data = environment_group_mean,
     aes(
-      time_multiple,
+      step,
       mean_pi,
       color = environment_group,
       group = environment_group
@@ -1701,217 +1994,43 @@ ggplot(
     linewidth = 1.45
   ) +
   geom_vline(
-    xintercept = 1,
+    xintercept = default_pars$T,
     linetype = "dashed",
     linewidth = 0.55
   ) +
   scale_color_manual(values = environment_cols) +
-  scale_x_continuous(
-    limits = c(0, 4),
-    breaks = 0:4,
-    expand = expansion(mult = c(0.005, 0.005))
-  ) +
   coord_cartesian(ylim = c(0, 1)) +
   theme_result() +
   labs(
-    title = "Persistent environmental differences anchor different long-run engagement levels",
-    subtitle = "Children begin with the same V0 and C0; only reward probability differs slightly and persistently",
-    x = "Time (multiples of original developmental horizon)",
+    title = "Small persistent reward differences lead to different long-run mean engagement levels",
+    subtitle = "Groups are defined by children's stable reward probabilities; all other parameters are shared",
+    x = "Developmental episode t",
     y = "EF engagement propensity",
     color = NULL
   )
 ```
 
-The individual paths remain stochastic, but the group averages settle into different long-run mean regimes. This is the model's **environmental anchoring** mechanism: persistent differences in how often control pays off can maintain different engagement levels without requiring different EF capacities.
+The thin lines are example children; the thicker lines are group averages. The groups are defined by the lower, middle, and upper thirds of the child-specific reward probabilities $p_i$. The point is not that $SD(p_i)=0.02$ creates dramatically more spread. Rather, a persistent difference in the reward environment gives children systematically different long-run mean payoff values, which can help maintain differences in engagement.
 
-```{r}
-#| label: run_tiny_context_differences
-#| echo: true
+# Result 4: Temporary stress produces a temporary drop in EF engagement
 
-df_context_same <- simulate_population(
-  model = "value_cost",
-  N = 1000,
-  p_reward_sd = 0,
-  seed = 601
-) %>%
-  mutate(context_condition = "Identical environment")
-
-df_context_tiny <- simulate_population(
-  model = "value_cost",
-  N = 1000,
-  p_reward_sd = 0.02,
-  seed = 601
-) %>%
-  mutate(context_condition = "Tiny reward differences")
-
-df_context <- bind_rows(
-  df_context_same,
-  df_context_tiny
-)
-
-context_metrics <- bind_rows(
-  development_metrics(df_context_same) %>%
-    mutate(context_condition = "Identical environment"),
-  development_metrics(df_context_tiny) %>%
-    mutate(context_condition = "Tiny reward differences")
-)
-
-context_stability <- bind_rows(
-  stability_table(df_context_same) %>%
-    mutate(context_condition = "Identical environment"),
-  stability_table(df_context_tiny) %>%
-    mutate(context_condition = "Tiny reward differences")
-)
-```
-
-## They modestly widen the distribution
-
-```{r}
-#| label: fig_context_spread
-#| fig-width: 8.5
-#| fig-height: 4.8
-#| fig-align: center
-
-context_sd <- df_context %>%
-  group_by(context_condition, dev_time) %>%
-  summarize(
-    sd_pi = sd(pi),
-    .groups = "drop"
-  )
-
-assert_plot_coverage(
-  context_sd,
-  group_cols = "context_condition",
-  value_cols = "sd_pi"
-)
-
-ggplot(
-  context_sd,
-  aes(dev_time, sd_pi, color = context_condition)
-) +
-  geom_line(linewidth = 1.05) +
-  scale_color_manual(values = condition_cols) +
-  scale_dev_time() +
-  theme_result() +
-  labs(
-    title = "Small reward differences modestly widen later heterogeneity",
-    x = "Developmental time (normalized)",
-    y = "Between-child SD",
-    color = NULL
-  )
-```
-
-The increase in spread is modest. We therefore avoid describing this result as strong *amplification*.
-
-## Their clearer effect is on rank stability
-
-```{r}
-#| label: fig_context_rank_stability
-#| fig-width: 8.3
-#| fig-height: 4.8
-#| fig-align: center
-
-context_stability_plot <- context_stability %>%
-  filter(comparison %in% c("Middle vs Late", "Early vs Late"))
-
-ggplot(
-  context_stability_plot,
-  aes(comparison, spearman_rho, fill = context_condition)
-) +
-  geom_col(position = position_dodge(width = 0.75), width = 0.65) +
-  coord_cartesian(ylim = c(0, 1)) +
-  theme_result() +
-  labs(
-    title = "Do persistent reward differences stabilize rank ordering?",
-    x = NULL,
-    y = "Spearman rank correlation",
-    fill = NULL
-  )
-```
-
-```{r}
-#| label: table_context_stability
-#| echo: false
-
-knitr::kable(
-  context_stability,
-  digits = 3,
-  caption = "Rank-order stability with identical versus slightly different reward environments"
-)
-```
-
-In the current parameterization, the small persistent reward differences increase rank persistence more clearly than they increase the overall amount of spread. This suggests a useful distinction:
-
-> **Stochastic experience creates differentiation; small persistent environmental differences can help anchor which children remain relatively high or low.**
-
-Under persistent child-specific reward probabilities, the anchoring also has a simple long-run interpretation: $V_i^*=p_iR$, so different $p_i$ imply different long-run mean engagement regimes even when $C_{\min}$ and all capacity-related assumptions are shared.
-
-### What Results 2 and 3 together imply
-
-The two results separate **emergence** from **anchoring**:
-
-- under a shared environment, stochastic experience is enough for children to diverge over development, but rank identity eventually fades;
-- with small persistent environmental differences, those developmental differences can remain anchored because children approach different long-run mean engagement regimes.
-
-This lets the model explain persistent individual differences without introducing a stable EF-capacity trait.
-
-## Reward probability predicts later engagement
-
-```{r}
-#| label: fig_context_late
-#| fig-width: 6.2
-#| fig-height: 5.0
-#| fig-align: center
-#| message: false
-
-late_context <- df_context_tiny %>%
-  filter(dev_time >= 0.85, dev_time <= 0.95) %>%
-  group_by(child_id, p_reward_child) %>%
-  summarize(
-    late_pi = mean(pi),
-    .groups = "drop"
-  )
-
-rho_context <- cor(
-  late_context$p_reward_child,
-  late_context$late_pi,
-  method = "spearman"
-)
-
-ggplot(
-  late_context,
-  aes(p_reward_child, late_pi)
-) +
-  geom_point(alpha = 0.28, size = 1.3) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.7) +
-  theme_result() +
-  labs(
-    title = "Tiny reward differences predict later engagement",
-    subtitle = paste0("Spearman rho = ", round(rho_context, 2)),
-    x = "Child-specific reward probability",
-    y = "Late EF engagement propensity"
-  )
-```
-
-# Result 4: Stress produces a mainly transient engagement dip
-
-Stress enters the **fast control decision**, not the slow learned cost state:
+Stress enters the **fast decision** through the temporary contextual cost $X_t$:
 
 $$
-\Delta\widehat{\mathrm{EVC}}_t
+D_t
 =
 V_t-C_t-X_t.
 $$
 
-During an acute stressor,
+During a stressor,
 
 $$
 X_t\uparrow
-\Rightarrow
+\quad\Rightarrow\quad
 \pi_t\downarrow.
 $$
 
-There is no age-dependent growth window in this model. A lingering effect can arise only indirectly if stress suppresses engagement and therefore reduces learning/practice opportunities during that period.
+Stress does not directly change the learned payoff $V_t$ or learned effort cost $C_t$. Any small difference that remains afterward arises indirectly because reduced engagement means fewer reward-learning and practice opportunities during the stress period.
 
 ```{r}
 #| label: run_stress
@@ -1920,10 +2039,8 @@ There is no age-dependent growth window in this model. A lingering effect can ar
 T_stress <- default_pars$T
 
 stress_vec <- rep(0, T_stress)
-
-stress_start <- round(0.60 * T_stress)
-stress_end <- round(0.635 * T_stress)
-
+stress_start <- round(0.55 * T_stress)
+stress_end <- round(0.585 * T_stress)
 stress_vec[stress_start:stress_end] <- 0.20
 
 df_no_stress <- simulate_population(
@@ -1940,36 +2057,33 @@ df_stress <- simulate_population(
   extra_cost = stress_vec,
   seed = 810
 ) %>%
-  mutate(condition = "Stress")
+  mutate(condition = "Temporary stress")
 
 df_stress_all <- bind_rows(
   df_no_stress,
   df_stress
 )
-```
-
-```{r}
-#| label: fig_stress
-#| fig-width: 9.3
-#| fig-height: 7.6
-#| fig-align: center
 
 stress_summary <- df_stress_all %>%
-  group_by(condition, dev_time) %>%
+  group_by(condition, step) %>%
   summarize(
     mean_X = mean(extra_cost),
     mean_pi = mean(pi),
-    mean_V = mean(V),
-    mean_C = mean(C),
     .groups = "drop"
-  ) %>%
+  )
+```
+
+## Immediate effect
+
+```{r}
+#| label: fig_stress_main
+#| fig-width: 8.8
+#| fig-height: 5.8
+#| fig-align: center
+
+stress_main <- stress_summary %>%
   pivot_longer(
-    cols = c(
-      mean_X,
-      mean_pi,
-      mean_V,
-      mean_C
-    ),
+    cols = c(mean_X, mean_pi),
     names_to = "measure",
     values_to = "value"
   ) %>%
@@ -1977,103 +2091,104 @@ stress_summary <- df_stress_all %>%
     measure = recode(
       measure,
       mean_X = "1. Temporary contextual cost X(t)",
-      mean_pi = "2. EF engagement propensity",
-      mean_V = "3. Learned expected payoff",
-      mean_C = "4. Learned effective effort cost"
+      mean_pi = "2. EF engagement propensity"
     )
   )
 
-# This check prevents the kind of silent/truncated line that motivated
-# the v13 figure audit.
-assert_plot_coverage(
-  stress_summary,
-  group_cols = c("condition", "measure"),
-  value_cols = "value"
-)
-
-stress_start_time <- (stress_start - 1) / (T_stress - 1)
-stress_end_time <- (stress_end - 1) / (T_stress - 1)
-
 ggplot(
-  stress_summary,
-  aes(dev_time, value, color = condition)
+  stress_main,
+  aes(step, value, color = condition)
 ) +
   geom_line(linewidth = 1.0) +
   geom_vline(
-    xintercept = c(stress_start_time, stress_end_time),
+    xintercept = c(stress_start, stress_end),
     linetype = "dotted",
-    linewidth = 0.45
+    linewidth = 0.45,
+    color = "black"
   ) +
   facet_wrap(~ measure, ncol = 1, scales = "free_y") +
-  scale_color_manual(values = condition_cols) +
-  scale_dev_time() +
+  scale_color_manual(
+    values = c(
+      "Reference" = "#4B5563",
+      "Temporary stress" = "#B54A4A"
+    )
+  ) +
   theme_result(base_size = 13) +
   labs(
-    title = "Temporary stress produces a transient engagement dip",
-    subtitle = "Stress enters the fast decision as X(t); any later difference comes from missed learning/practice",
-    x = "Developmental time (normalized)",
+    title = "Temporary stress causes a sharp but temporary engagement dip",
+    subtitle = "Dotted lines mark the stress period",
+    x = "Developmental episode t",
     y = NULL,
     color = NULL
   )
 ```
 
-## Quantifying the transient and residual effects
+The main effect is immediate: engagement propensity drops sharply while the stressor is present and then rebounds once the stressor ends.
+
+## Is there any difference left after the stressor ends?
+
+The remaining difference is much smaller than the acute drop, so we plot only the **post-stress period** on a tighter y-axis.
 
 ```{r}
-#| label: stress_recovery
-#| echo: true
+#| label: fig_stress_residual
+#| fig-width: 8.4
+#| fig-height: 4.2
+#| fig-align: center
 
-stress_pi_diff <- df_stress_all %>%
-  group_by(condition, dev_time) %>%
-  summarize(mean_pi = mean(pi), .groups = "drop") %>%
-  pivot_wider(names_from = condition, values_from = mean_pi) %>%
-  mutate(delta_stress = Stress - Reference)
+stress_difference <- stress_summary %>%
+  select(condition, step, mean_pi) %>%
+  pivot_wider(
+    names_from = condition,
+    values_from = mean_pi
+  ) %>%
+  transmute(
+    step = step,
+    delta_pi = `Temporary stress` - Reference
+  ) %>%
+  filter(step > stress_end)
 
-largest_stress_dip <- min(stress_pi_diff$delta_stress, na.rm = TRUE)
+late_window_start_stress <- round(0.85 * T_stress)
 
-late_stress <- df_stress_all %>%
-  filter(dev_time >= 0.85, dev_time <= 0.95) %>%
-  group_by(condition) %>%
-  summarize(
-    late_mean_pi = mean(pi),
-    .groups = "drop"
+late_residual <- stress_difference %>%
+  filter(step >= late_window_start_stress) %>%
+  summarize(mean_delta = mean(delta_pi)) %>%
+  pull(mean_delta)
+
+residual_min <- min(stress_difference$delta_pi, na.rm = TRUE)
+residual_max <- max(stress_difference$delta_pi, na.rm = TRUE)
+
+ggplot(
+  stress_difference,
+  aes(step, delta_pi)
+) +
+  geom_hline(
+    yintercept = 0,
+    linewidth = 0.35,
+    color = "black"
+  ) +
+  geom_line(
+    linewidth = 1.0,
+    color = "#B54A4A"
+  ) +
+  theme_result(base_size = 13) +
+  labs(
+    title = "A small difference remains after stress ends",
+    subtitle = paste0(
+      "Stress minus reference; late-window mean difference = ",
+      round(late_residual, 3)
+    ),
+    x = "Developmental episode t",
+    y = "Difference in EF engagement propensity"
   )
-
-late_stress_wide <- late_stress %>%
-  pivot_wider(names_from = condition, values_from = late_mean_pi)
-
-late_stress_difference <- late_stress_wide$Stress - late_stress_wide$Reference
-
-knitr::kable(
-  late_stress,
-  digits = 3,
-  caption = "Late engagement after a temporary stressor"
-)
 ```
 
-The model produces a much larger engagement drop during the stress period than remains later. Under this specification, the largest mean stress-reference difference is `r round(largest_stress_dip, 3)`, whereas the late difference is `r round(late_stress_difference, 3)`. The dominant pattern is therefore a **transient contextual fluctuation with a smaller residual consequence**.
+The residual is small but visible once the acute stress period is removed from the plot. In this model, it occurs because children in the stress condition engaged less during the stress window and therefore accumulated slightly fewer learning and practice opportunities. The main result remains the **temporary engagement dip**, not a large lasting effect.
 
-# Result 5: The minimal model does not produce an early-support advantage
+# Result 5: The minimal model does not give early support a special advantage
 
-The previous capacity model guaranteed that early reward support mattered more because capacity growth was multiplied by an age-dependent function $g(a)$. That assumption is now removed.
+The model allows experience to change later engagement, but that does not automatically mean that **earlier** experience has a stronger effect than the same experience later.
 
-We give the same reward increase for the same duration at two different developmental times:
-
-$$
-p_t\uparrow
-\rightarrow
-\text{more rewarding engagement experiences}
-\rightarrow
-V_t\uparrow
-\rightarrow
-\pi_t\uparrow
-\rightarrow
-\text{more practice}
-\rightarrow
-C_t\downarrow.
-$$
-
-If early support is intrinsically advantaged by the feedback dynamics, it should outperform later support even without an age gate.
+We test this by increasing the reward probability by the same amount for the same duration, once early and once later in the simulation.
 
 ```{r}
 #| label: run_reward_timing
@@ -2129,21 +2244,19 @@ df_reward_timing <- bind_rows(
 
 ```{r}
 #| label: fig_reward_timing
-#| fig-width: 9.3
-#| fig-height: 7.5
+#| fig-width: 9.0
+#| fig-height: 5.8
 #| fig-align: center
 
 reward_summary <- df_reward_timing %>%
-  group_by(condition, dev_time) %>%
+  group_by(condition, step) %>%
   summarize(
     mean_p = mean(p_reward_used),
-    mean_V = mean(V),
     mean_pi = mean(pi),
-    mean_C = mean(C),
     .groups = "drop"
   ) %>%
   pivot_longer(
-    cols = c(mean_p, mean_V, mean_pi, mean_C),
+    cols = c(mean_p, mean_pi),
     names_to = "measure",
     values_to = "value"
   ) %>%
@@ -2151,296 +2264,132 @@ reward_summary <- df_reward_timing %>%
     measure = recode(
       measure,
       mean_p = "1. Reward probability",
-      mean_V = "2. Learned expected payoff",
-      mean_pi = "3. EF engagement propensity",
-      mean_C = "4. Learned effective effort cost"
+      mean_pi = "2. EF engagement propensity"
     )
   )
 
-assert_plot_coverage(
-  reward_summary,
-  group_cols = c("condition", "measure"),
-  value_cols = "value"
-)
-
 ggplot(
   reward_summary,
-  aes(dev_time, value, color = condition)
+  aes(step, value, color = condition)
 ) +
   geom_line(linewidth = 1.0) +
   facet_wrap(~ measure, ncol = 1, scales = "free_y") +
-  scale_color_manual(values = condition_cols) +
-  scale_dev_time() +
+  scale_color_manual(
+    values = c(
+      "Reference" = "#4B5563",
+      "Early support" = "#B54A4A",
+      "Later support" = "#3B82B6"
+    )
+  ) +
   theme_result(base_size = 13) +
   labs(
-    title = "Reward timing without an imposed sensitive period",
-    subtitle = "Early and later support have the same magnitude and duration",
-    x = "Developmental time (normalized)",
+    title = "The same reward support is given early or later",
+    subtitle = "The lower panel shows the resulting change in EF engagement propensity",
+    x = "Developmental episode t",
     y = NULL,
     color = NULL
   )
 ```
 
-## Two fair timing comparisons
+## How should early and later support be compared?
 
-A common final-time comparison favors later interventions through recency. We therefore report both:
+If we measure both interventions at the **final episode**, later support has occurred more recently, so that comparison can favor the later intervention simply because less time has passed.
 
-1. **common final developmental time**;
-2. **equal lag after each intervention ends**.
+The more informative comparison is therefore to measure each intervention after the **same amount of follow-up time** has elapsed since it ended.
 
 ```{r}
 #| label: reward_timing_comparisons
 #| echo: true
 
-# Common final developmental window.
-final_window <- c(0.85, 0.95)
+# Common final developmental window
+final_start <- round(0.85 * T_reward)
 
-final_scores <- df_reward_timing %>%
-  filter(dev_time >= final_window[1], dev_time <= final_window[2]) %>%
+final_effects <- df_reward_timing %>%
+  filter(step >= final_start) %>%
   group_by(condition) %>%
-  summarize(mean_pi = mean(pi), .groups = "drop")
-
-final_ref <- final_scores$mean_pi[final_scores$condition == "Reference"]
-final_early_effect <- final_scores$mean_pi[final_scores$condition == "Early support"] - final_ref
-final_late_effect <- final_scores$mean_pi[final_scores$condition == "Later support"] - final_ref
-
-# Equal lag after intervention end.
-equal_lag <- round(0.15 * T_reward)
-half_width <- round(0.02 * T_reward)
-
-early_eval <- early_end + equal_lag
-late_eval <- late_end + equal_lag
-
-ref_early_lag <- score_at_steps(df_reward_ref, early_eval, half_width) %>%
-  summarize(x = mean(score)) %>% pull(x)
-ref_late_lag <- score_at_steps(df_reward_ref, late_eval, half_width) %>%
-  summarize(x = mean(score)) %>% pull(x)
-
-early_lag_score <- score_at_steps(df_reward_early, early_eval, half_width) %>%
-  summarize(x = mean(score)) %>% pull(x)
-late_lag_score <- score_at_steps(df_reward_late, late_eval, half_width) %>%
-  summarize(x = mean(score)) %>% pull(x)
-
-early_equal_lag_effect <- early_lag_score - ref_early_lag
-late_equal_lag_effect <- late_lag_score - ref_late_lag
-
-reward_effects <- tibble(
-  comparison = c(
-    "Same lag after support",
-    "Common final time"
-  ),
-  `Early support effect` = c(
-    early_equal_lag_effect,
-    final_early_effect
-  ),
-  `Later support effect` = c(
-    late_equal_lag_effect,
-    final_late_effect
+  summarize(mean_pi = mean(pi), .groups = "drop") %>%
+  pivot_wider(names_from = condition, values_from = mean_pi) %>%
+  transmute(
+    comparison = "Common final time",
+    early_effect = `Early support` - Reference,
+    later_effect = `Later support` - Reference
   )
+
+# Equal follow-up lag after each intervention ends
+followup_lag <- round(0.15 * T_reward)
+window_halfwidth <- round(0.025 * T_reward)
+
+early_eval_center <- early_end + followup_lag
+late_eval_center <- late_end + followup_lag
+
+window_mean <- function(df, condition_name, center, halfwidth) {
+  df %>%
+    filter(
+      condition == condition_name,
+      step >= center - halfwidth,
+      step <= center + halfwidth
+    ) %>%
+    summarize(value = mean(pi)) %>%
+    pull(value)
+}
+
+early_effect_equal_lag <-
+  window_mean(df_reward_timing, "Early support", early_eval_center, window_halfwidth) -
+  window_mean(df_reward_timing, "Reference", early_eval_center, window_halfwidth)
+
+later_effect_equal_lag <-
+  window_mean(df_reward_timing, "Later support", late_eval_center, window_halfwidth) -
+  window_mean(df_reward_timing, "Reference", late_eval_center, window_halfwidth)
+
+equal_lag_effects <- tibble(
+  comparison = "Same follow-up lag",
+  early_effect = early_effect_equal_lag,
+  later_effect = later_effect_equal_lag
+)
+
+reward_timing_effects <- bind_rows(
+  final_effects,
+  equal_lag_effects
 )
 
 knitr::kable(
-  reward_effects,
+  reward_timing_effects,
   digits = 3,
-  caption = "Reward-support effects on EF engagement propensity"
+  col.names = c(
+    "Comparison",
+    "Effect of early support",
+    "Effect of later support"
+  ),
+  caption = "Early versus later support"
 )
 ```
 
-```{r}
-#| label: fig_reward_effect_compare
-#| fig-width: 7.2
-#| fig-height: 4.8
-#| fig-align: center
+The **same-follow-up-lag** comparison is the key one. Under the current default parameters, early and later support have very similar effects once the amount of follow-up time is matched. The model therefore does not produce an inherent early-support advantage.
 
-reward_effect_plot <- reward_effects %>%
-  pivot_longer(
-    cols = c(`Early support effect`, `Later support effect`),
-    names_to = "timing",
-    values_to = "effect"
-  ) %>%
-  mutate(
-    timing = recode(
-      timing,
-      `Early support effect` = "Early support",
-      `Later support effect` = "Later support"
-    )
-  )
+This is theoretically useful: experience-dependent feedback can make experience matter without automatically creating a sensitive period. If we want early experience to be systematically more influential than the same later experience, the model would need an additional developmental mechanism, such as age-dependent plasticity.
 
-ggplot(
-  reward_effect_plot,
-  aes(comparison, effect, fill = timing)
-) +
-  geom_col(position = position_dodge(width = 0.75), width = 0.65) +
-  theme_result() +
-  labs(
-    title = "No early-support advantage appears in the minimal model",
-    x = NULL,
-    y = "Engagement effect vs reference",
-    fill = NULL
-  )
-```
+# Result 6: Do the main results depend on the parameter choices?
 
-Under the current specification, early support is **not** more effective than later support under either comparison. The important conclusion is therefore negative but informative:
+The previous results use one provisional set of parameter values. We therefore ask whether the same qualitative pattern appears when those assumptions are changed.
 
-> **Experience-dependent value and cost feedback alone does not imply an early sensitive-period advantage.**
+We generate **250 different parameter combinations**. For each combination, we simulate **five independent populations** so that one unusual random run is not mistaken for a parameter effect.
 
-A strong early-intervention advantage would require an additional developmental assumption, such as age-dependent plasticity. We should only add that mechanism if it is part of the theoretical claim we want to test.
+The table below shows exactly what is varied. The ranges are theoretical sensitivity ranges rather than empirically estimated bounds.
 
-# Result 6: Under a shared environment, developmental differentiation is finite-horizon
+| Parameter | Meaning | Default value | Values sampled in the sensitivity analysis | Sampling |
+|---|---|---:|---:|---|
+| $\alpha_V$ | How quickly expected payoff is learned | 0.0244 | 0.006 to 0.070 | log-uniform |
+| $\alpha_C$ | How quickly practice reduces future effort cost | 0.00263 | 0.0004 to 0.0070 | log-uniform |
+| $\tau$ | How strongly net value differences translate into engagement probability | 0.163 | 0.10 to 0.30 | uniform |
+| $p$ | Probability that EF engagement pays off for everyone in that simulated population | 0.591 | 0.45 to 0.72 | uniform |
+| $D_0=V_0-C_0$ | Initial net value of engaging EF | -0.410 | -0.60 to -0.20 | uniform |
+| $C_0-C_{\min}$ | Maximum amount of practice-related cost reduction available | 0.528 | 0.25 to 0.75 | uniform |
 
-The analytic constraint predicts that the self-reinforcing dynamics should weaken as there is less left to learn. We therefore extend the same initially homogeneous population to four times the original developmental horizon.
+For each of the 250 parameter sets, the six values are sampled independently from these ranges. The two learning rates are sampled on a **log scale** because their plausible sensitivity ranges span roughly an order of magnitude; the remaining parameters are sampled uniformly over the stated intervals.
 
-The critical distinction is between:
+Each parameter set is then simulated five times with independent random engagement and reward histories. In the full sweep, each simulated population contains **150 children followed for 900 developmental episodes**. The five replications are averaged before comparing parameter sets.
 
-- **cross-sectional heterogeneity:** how much children differ at a given time;
-- **rank memory:** whether the same children remain high or low.
-
-```{r}
-#| label: run_long_horizon
-#| echo: true
-
-# "4x the original horizon" means four times as many time
-# intervals. A trajectory with T points contains T - 1 intervals.
-T_long <- 4 * (default_pars$T - 1) + 1
-
-df_long <- simulate_population(
-  model = "value_cost",
-  N = 600,
-  T = T_long,
-  p_reward_sd = 0,
-  record_every = 10,
-  seed = 1400
-) %>%
-  mutate(
-    time_multiple = (step - 1) / (default_pars$T - 1)
-  )
-```
-
-
-## Cross-sectional heterogeneity eventually falls
-
-```{r}
-#| label: fig_long_sd
-#| fig-width: 8.2
-#| fig-height: 4.5
-#| fig-align: center
-
-long_sd <- df_long %>%
-  group_by(time_multiple) %>%
-  summarize(sd_pi = sd(pi), .groups = "drop")
-
-assert_plot_coverage(
-  long_sd,
-  time_col = "time_multiple",
-  value_cols = "sd_pi",
-  expected_start = 0,
-  expected_end = 4
-)
-
-ggplot(long_sd, aes(time_multiple, sd_pi)) +
-  geom_line(linewidth = 1.0) +
-  geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.45) +
-  theme_result() +
-  labs(
-    title = "Differentiation peaks and then weakens",
-    subtitle = "Dashed line marks the end of the original developmental horizon",
-    x = "Time (multiples of original horizon)",
-    y = "Between-child SD"
-  )
-```
-
-The nonzero long-run SD should not be interpreted as permanent types: choices and reward outcomes remain stochastic and the learning rate is constant.
-
-## Rank memory is the stronger diagnostic
-
-We use each child's mean engagement around the end of the original developmental period as a reference rank, then ask how strongly that rank predicts later ranks.
-
-```{r}
-#| label: rank_memory_long
-#| echo: true
-
-reference_rank_scores <- df_long %>%
-  filter(time_multiple >= 0.80, time_multiple <= 0.95) %>%
-  group_by(child_id) %>%
-  summarize(reference_score = mean(pi), .groups = "drop")
-
-memory_centers <- seq(0.90, 4.00, by = 0.20)
-memory_half_width <- 0.06
-
-rank_memory <- bind_rows(
-  lapply(memory_centers, function(center_i) {
-
-    later_scores <- df_long %>%
-      filter(
-        time_multiple >= center_i - memory_half_width,
-        time_multiple <= center_i + memory_half_width
-      ) %>%
-      group_by(child_id) %>%
-      summarize(later_score = mean(pi), .groups = "drop")
-
-    joined <- inner_join(reference_rank_scores, later_scores, by = "child_id")
-
-    tibble(
-      time_multiple = center_i,
-      rank_memory = cor(
-        joined$reference_score,
-        joined$later_score,
-        method = "spearman"
-      )
-    )
-  })
-)
-```
-
-```{r}
-#| label: fig_rank_memory_long
-#| fig-width: 8.2
-#| fig-height: 4.5
-#| fig-align: center
-
-ggplot(rank_memory, aes(time_multiple, rank_memory)) +
-  geom_hline(yintercept = 0, linewidth = 0.4) +
-  geom_line(linewidth = 1.0) +
-  geom_point(size = 1.6) +
-  coord_cartesian(ylim = c(-0.1, 1)) +
-  theme_result() +
-  labs(
-    title = "The identities of high- and low-engagement children fade",
-    x = "Time (multiples of original horizon)",
-    y = "Rank correlation"
-  )
-```
-
-This distinction clarifies the theoretical result: **early stochastic experience can generate substantial and moderately persistent developmental differentiation, but the minimal stationary model does not permanently lock individuals into high- and low-engagement types.**
-
-This conclusion applies to the **shared-environment case**, where all children have the same stationary reward probability. Persistent between-child differences in reward environment provide a separate anchoring mechanism, as shown in Result 3.
-
-This default trajectory answers *whether* rank memory can fade, but not **how quickly it fades across the parameter region**. Result 7 therefore extends this analysis by estimating rank-memory timescales for the same wider parameter sample used in the robustness analysis.
-
-# Result 7: How robust is the developmental pattern?
-
-The previous figures use one provisional parameterization. An earlier local sensitivity check suggested that the pattern was not confined to that single point, but each parameter vector was simulated only once and the range was deliberately narrow.
-
-Here we make the test harder in two ways:
-
-1. sample a **wider parameter region**;
-2. run **multiple independent populations for every parameter vector** so stochastic realization is not confounded with parameter choice.
-
-We vary six quantities:
-
-- value-learning rate $\alpha_V$;
-- practice/learned-efficiency rate $\alpha_C$;
-- decision temperature $\tau$;
-- reward probability $p$;
-- initial net control value $D_0=V_0-C_0$;
-- available practice headroom $H_C=C_0-C_{\min}$.
-
-Separating $D_0$ from $H_C$ is important. Varying $C_0$ alone would change both initial net utility and how much future cost reduction is possible, so these two assumptions are varied independently here.
-
-The parameter region is still a theoretical sensitivity region, not a claim about psychologically plausible bounds in children.
-
-Within each parameter set, children still share the same reward probability. The sweep varies the population-level value of $p$ across parameter sets; it does **not** introduce child-specific $p_i$ differences. The long-horizon rank-memory results below therefore characterize persistence under a shared environment.
-
+Within any one parameter set, children still begin identically and share the same reward probability $p$. Thus, this analysis varies the **general model assumptions across simulated populations**. It is different from Result 3, where the mean reward environment is held fixed but $p_i$ varies **between children within the same population**.
 
 ```{r}
 #| label: run_parameter_sweep
@@ -2483,13 +2432,13 @@ sweep_pars <- tibble(
 
   # Initial net value and future practice opportunity are varied separately.
   initial_delta = runif(n_parameter_sets, -0.60, -0.20),
-  cost_headroom = runif(n_parameter_sets, 0.25, 0.75),
+  practice_range = runif(n_parameter_sets, 0.25, 0.75),
 
   V0 = default_pars$V0
 ) %>%
   mutate(
     C0 = V0 - initial_delta,
-    C_min = C0 - cost_headroom
+    C_min = C0 - practice_range
   )
 
 # ------------------------------------------------------------------
@@ -2560,7 +2509,7 @@ sweep_list <- parallel_lapply(
 
 sweep_rep_results <- bind_rows(sweep_list)
 
-# Average each outcome across independent stochastic realizations.
+# Average each outcome across independent simulation realizations.
 sweep_results <- sweep_rep_results %>%
   group_by(
     set_id,
@@ -2569,7 +2518,7 @@ sweep_results <- sweep_rep_results %>%
     tau,
     p_reward,
     initial_delta,
-    cost_headroom,
+    practice_range,
     V0,
     C0,
     C_min
@@ -2596,6 +2545,397 @@ sweep_results <- sweep_rep_results %>%
     rho_early_late = rho_early_late_avg
   )
 ```
+
+For each parameter combination, we ask three simple questions:
+
+1. Does average engagement increase from early to late development?
+2. Does between-child variation increase from early to late development?
+3. Once children have begun to differ, how strongly does their middle-stage ranking predict their later ranking?
+
+The first two questions can be shown together in one figure. Each point below is **one parameter combination**, averaged across its five independent simulated populations.
+
+```{r}
+#| label: fig_parameter_robustness
+#| fig-width: 8.2
+#| fig-height: 6.4
+#| fig-align: center
+#| echo: false
+
+sweep_patterns <- sweep_results %>%
+  mutate(
+    pattern = case_when(
+      delta_mean > 0 & sd_gain > 0 ~ "Improvement + differentiation",
+      delta_mean > 0 & sd_gain <= 0 ~ "Improvement only",
+      delta_mean <= 0 & sd_gain > 0 ~ "Differentiation only",
+      TRUE ~ "Neither"
+    )
+  )
+
+pattern_levels <- c(
+  "Improvement + differentiation",
+  "Improvement only",
+  "Differentiation only",
+  "Neither"
+)
+
+pattern_counts <- sweep_patterns %>%
+  count(pattern) %>%
+  tidyr::complete(
+    pattern = pattern_levels,
+    fill = list(n = 0)
+  ) %>%
+  mutate(
+    pct = n / sum(n)
+  )
+
+x_right <- max(sweep_patterns$delta_mean, na.rm = TRUE)
+x_left  <- min(sweep_patterns$delta_mean, na.rm = TRUE)
+y_top   <- max(sweep_patterns$sd_gain, na.rm = TRUE)
+y_bottom <- min(sweep_patterns$sd_gain, na.rm = TRUE)
+
+label_positions <- tibble(
+  pattern = pattern_levels,
+  x = c(
+    0.70 * x_right,
+    0.70 * x_right,
+    0.70 * x_left,
+    0.70 * x_left
+  ),
+  y = c(
+    0.82 * y_top,
+    0.72 * y_bottom,
+    0.82 * y_top,
+    0.72 * y_bottom
+  )
+) %>%
+  left_join(pattern_counts, by = "pattern") %>%
+  mutate(
+    label = paste0(
+      pattern,
+      "\n",
+      scales::percent(pct, accuracy = 1)
+    )
+  )
+
+ggplot(
+  sweep_patterns,
+  aes(delta_mean, sd_gain)
+) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    linewidth = 0.5
+  ) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dashed",
+    linewidth = 0.5
+  ) +
+  geom_point(
+    alpha = 0.42,
+    size = 1.8
+  ) +
+  geom_text(
+    data = label_positions,
+    aes(x, y, label = label),
+    inherit.aes = FALSE,
+    fontface = "bold",
+    size = 3.6,
+    lineheight = 0.95
+  ) +
+  theme_result() +
+  labs(
+    title = "Do developmental improvement and differentiation survive parameter changes?",
+    subtitle = paste0(
+      "Each point is one parameter combination, averaged across ",
+      n_mc_reps,
+      " independent simulated populations"
+    ),
+    x = "Change in mean EF engagement (late - early)",
+    y = "Change in between-child SD (late - early)"
+  )
+```
+
+How to read the figure:
+
+- **upper right:** average engagement increases and children become more different;
+- **lower right:** average engagement increases, but between-child variation does not;
+- **upper left:** children become more different, but average engagement does not increase;
+- **lower left:** neither pattern occurs.
+
+The upper-right quadrant is therefore the parameter region that reproduces the two main developmental findings from Results 1 and 2.
+
+Rank persistence is not encoded in this figure because adding a third visual dimension makes the plot harder to read. We summarize it separately in the table below.
+
+```{r}
+#| label: table_parameter_robustness
+#| echo: false
+
+robustness_summary <- tibble(
+  `Question` = c(
+    "Does mean EF engagement increase?",
+    "Does between-child variation increase?",
+    "Do both occur together?",
+    "How persistent is middle-to-late rank ordering?"
+  ),
+  `Summary across parameter sets` = c(
+    scales::percent(
+      mean(sweep_results$delta_mean > 0),
+      accuracy = 1
+    ),
+    scales::percent(
+      mean(sweep_results$sd_gain > 0),
+      accuracy = 1
+    ),
+    scales::percent(
+      mean(
+        sweep_results$delta_mean > 0 &
+        sweep_results$sd_gain > 0
+      ),
+      accuracy = 1
+    ),
+    paste0(
+      "Median Spearman rho = ",
+      round(
+        median(
+          sweep_results$rho_middle_late,
+          na.rm = TRUE
+        ),
+        2
+      )
+    )
+  )
+)
+
+knitr::kable(
+  robustness_summary,
+  caption = "Do the main developmental results survive different parameter choices?"
+)
+```
+
+The figure makes the robustness question more concrete: if most points fall in the upper-right quadrant, the combination of **developmental improvement + increasing between-child differentiation** is not restricted to the single default parameter setting.
+
+The purpose is not to identify the “correct” parameter values. The sampled ranges are theoretical sensitivity ranges. Parameter combinations outside the upper-right quadrant are also informative because they show when the proposed mechanism produces only part of the developmental pattern.
+
+The more detailed parameter-diagnostic plots are kept in the appendix so that they do not interrupt the main argument.
+
+# What have we learned from the minimal model?
+
+The main results can be summarized in six questions.
+
+| Question | What the current model shows |
+|---|---|
+| **1. What produces developmental improvement?** | EVC-like choice alone is flat; value learning adds modest change; adding practice-related reduction in future effort cost produces much stronger developmental improvement and differentiation. |
+| **2. Can initially identical children become different?** | Yes. Different chance engagement and reward experiences generate different $V_t$, $C_t$, and $\pi_t$. Those differences can persist over development, although under a completely shared environment their rank ordering eventually fades. |
+| **3. What can make those differences more stable?** | Small persistent differences in how often EF pays off add only modestly to total spread, but they increase rank persistence and imply different long-run mean engagement levels. |
+| **4. Can temporary context disrupt engagement?** | Yes. A temporary stressor produces a sharp drop in engagement followed by substantial recovery. Any small residual difference comes indirectly from missed learning and practice opportunities. |
+| **5. Is early experience automatically more influential?** | No. When follow-up time is matched, the same reward support given early versus later has very similar effects. The minimal feedback does not by itself create a sensitive period. |
+| **6. Are these results tied to one parameter setting?** | The wider replicated parameter sweep tests whether improvement and differentiation occur across a broader region of the model rather than only at the default parameter values. |
+
+The main theoretical story is therefore fairly narrow: repeated engagement changes future learning opportunities, so initially identical children can develop different engagement trajectories. Persistent environmental differences can make those differences more stable. But the model does not automatically produce permanently fixed types or a special advantage of early experience.
+
+# Extension A: Is passive cost stabilization needed?
+
+Yuko previously asked whether a baseline cost level and mean reversion are necessary. We therefore keep this as an **extension**, not part of the core model.
+
+The extension adds
+
+$$
+C_{t+1}
+=
+C_t
++
+\eta_C(C_{\mathrm{set}}-C_t)
+-
+\alpha_C A_t(C_t-C_{\min}).
+$$
+
+This is different from the discarded rule $A_t=0\Rightarrow C_{t+1}>C_t$: non-engagement is not itself assigned a penalty. Instead, practice-related cost reductions partly decay unless they are reinforced.
+
+```{r}
+#| label: run_cost_stabilization
+#| echo: true
+
+df_practice_only <- simulate_population(
+  model = "value_cost",
+  N = 1000,
+  p_reward_sd = 0,
+  seed = 1201
+)
+
+df_cost_stabilized <- simulate_population(
+  model = "value_cost_stabilized",
+  N = 1000,
+  p_reward_sd = 0,
+  seed = 1201
+)
+
+diag_stabilization <- bind_rows(
+  df_practice_only,
+  df_cost_stabilized
+) %>%
+  group_by(model_label, step) %>%
+  summarize(
+    mean_pi = mean(pi),
+    sd_pi = sd(pi),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(
+    cols = c(mean_pi, sd_pi),
+    names_to = "measure",
+    values_to = "value"
+  ) %>%
+  mutate(
+    measure = recode(
+      measure,
+      mean_pi = "Population mean propensity",
+      sd_pi = "Between-child SD in propensity"
+    )
+  )
+
+ggplot(
+  diag_stabilization,
+  aes(step, value, color = model_label)
+) +
+  geom_line(linewidth = 1.0) +
+  facet_wrap(~ measure, ncol = 1, scales = "free_y") +
+  scale_color_manual(values = model_cols) +
+  theme_result() +
+  labs(
+    title = "Passive cost stabilization mainly dampens the feedback",
+    x = "Developmental episode t",
+    y = NULL,
+    color = NULL
+  )
+```
+
+Under the current parameterization, this extension dampens both mean developmental change and heterogeneity. It is therefore **not needed to produce the core developmental pattern**. We should leave it outside the main model unless a clearer theoretical or empirical reason for passive cost stabilization emerges.
+
+# LEVC and observed performance: when a separate automaticity state becomes necessary
+
+The reparameterization above changes how we should think about the LEVC extension.
+
+For an **engagement-only** model, a separate automaticity state is mathematically redundant with the current practice-dependent cost state. We can write
+
+$$
+L_{t+1}
+=
+L_t+\alpha_C A_t(1-L_t)
+$$
+
+and
+
+$$
+C_t
+=
+C_{\min}
++
+(C_0-C_{\min})(1-L_t).
+$$
+
+Adding both $L_t$ and $C_t$ would therefore add notation without adding a new mechanism.
+
+A distinct automaticity state becomes useful when we want to model **observed EF task performance**. LEVC explicitly treats accuracy as a joint function of automaticity and control intensity. In a developmental extension, we could therefore distinguish:
+
+$$
+\text{propensity to engage control}
+$$
+
+from
+
+$$
+\text{task-specific automaticity}
+$$
+
+and let observed performance depend on both:
+
+$$
+P(\mathrm{correct})
+=
+f(\text{control allocated},L_t,\text{task difficulty}).
+$$
+
+This allows an important developmental possibility:
+
+$$
+L_t\uparrow
+\Rightarrow
+\text{equal or better performance with less control}.
+$$
+
+If we take this route, $C_t$ should no longer silently duplicate automaticity. We would need to decide whether $C$ represents an **inherent subjective cost of control intensity**, while $L$ represents learned task efficiency.
+
+That is a different model and should only be introduced if the target phenomenon is observed EF **performance**, rather than the decision to engage control.
+
+# Overall interpretation
+
+The current model gives a more specific account than the earlier capacity-based version.
+
+First, the strongest developmental change comes from the **practice pathway**: engaging EF provides practice, which gradually lowers the effective effort cost of engaging again. Reward learning also matters, but under the current specification it produces much smaller developmental change on its own.
+
+Second, stable individual differences do not have to be imposed at baseline. Initially identical children can develop different engagement propensities because they experience different engagement and reward sequences by chance. These relative differences can persist over a meaningful developmental period, although they are not permanently fixed when every child continues to experience exactly the same environment.
+
+Third, persistent environmental differences provide one way for later individual differences to remain more stable. If some children consistently experience EF as paying off slightly more often than others, they learn different long-run payoff values and can therefore maintain different mean engagement levels without introducing different EF capacities.
+
+Finally, this experience-dependent feedback does **not** automatically make early experience more powerful than later experience. A genuine early sensitive-period advantage would require an additional developmental assumption rather than following from the current learning and practice dynamics alone.
+
+# What this model does not yet establish
+
+These simulations are theoretical demonstrations. They do not show that:
+
+- generalized EF practice in children actually behaves like task-specific automaticity in LEVC;
+- the proposed mapping from practice to effective subjective cost is the true developmental mechanism;
+- the current parameter ranges correspond to children or to any particular age range;
+- observed EF task scores directly measure engagement propensity;
+- reward probability is the only or primary environmental source of individual differences;
+- the current dynamics are uniquely supported relative to alternative control-learning models.
+
+The replicated parameter analysis tests sensitivity of the mechanism, not empirical validity. Developmental or experimental data would still be required to constrain the learning rates, practice-related cost-reduction range, environmental inputs, and mapping from latent engagement to observed EF behavior.
+
+# Recommended next steps
+
+1. **Decide what the practice state represents psychologically.** The model only requires a saturating practice-related change in future ease of engagement. If we interpret this as generalized EF automaticity or efficiency, we need to justify transfer across contexts because LEVC itself is task-specific.
+2. **Keep the reduced-form $C$ representation for now.** Adding a separate automaticity node would be mathematically redundant unless we also model EF performance.
+3. **Check a more canonical LVOC value-learning implementation.** The current delta rule captures the basic experience-learning idea but not LVOC's full feature-based value approximation.
+4. **Only add age-dependent plasticity if we explicitly want to explain an early-intervention advantage.** The current feedback does not generate one by itself.
+5. **Use candidate longitudinal or experimental data to constrain the mechanisms only after the engagement-versus-performance target is settled.**
+
+# Working interpretation for the paper
+
+A framing consistent with the current model is:
+
+> Existing theories explain how people allocate cognitive control and how experience changes the future value or efficiency of control. We ask what these processes imply when repeated over developmental timescales. In a minimal model, chance differences in experience can generate substantial and moderately persistent differences in EF engagement even when children begin identically. The strongest developmental feedback comes from practice: engaging control creates practice opportunities that can make future engagement easier and therefore more likely. Small persistent differences in how often EF pays off can make later individual differences more stable by producing different long-run mean payoff values. Under a completely shared environment, earlier rank differences eventually lose predictive value. The same feedback does not by itself create an early sensitive-period advantage.
+
+A stronger empirical claim would require evidence that the practice-to-effective-cost mechanism generalizes across the EF contexts relevant to development.
+
+# Appendix: Additional parameter diagnostics
+
+
+## Additional check: persistent reward differences and overall spread
+
+The main text focuses on rank persistence because increased spread is the more direct consequence of imposing greater between-child variation in reward probability.
+
+```{r}
+#| label: fig_reward_sd_sensitivity_spread_appendix
+#| fig-width: 7.2
+#| fig-height: 4.3
+#| fig-align: center
+
+ggplot(
+  reward_sd_sensitivity,
+  aes(imposed_sd_p, late_sd_pi)
+) +
+  geom_line(linewidth = 1.0) +
+  geom_point(size = 2.4) +
+  theme_result() +
+  labs(
+    title = "Larger reward differences also widen later engagement",
+    x = "Between-child SD in reward probability",
+    y = "Late between-child SD in engagement propensity"
+  )
+```
+
+The main Results section reports only the robustness question and its summary. The analyses below are retained as diagnostics for understanding **why** some parameter settings produce stronger or weaker developmental patterns. They are not additional core results.
 
 ## Distribution of replicated outcomes
 
@@ -2646,7 +2986,7 @@ Across the wider replicated sweep:
 - `r scales::percent(mean(sweep_results$delta_mean > 0 & sweep_results$sd_gain > 0), accuracy = 1)` show **both** patterns;
 - median middle-to-late rank persistence is $\rho=$ `r round(median(sweep_results$rho_middle_late, na.rm = TRUE), 2)`.
 
-Unlike a narrow local check, this wider analysis is allowed to fail. Parameter regions with weak development, shrinking heterogeneity, or poor rank persistence are useful because they show where the proposed mechanism is insufficient.
+Some parameter settings produce weaker development, less differentiation, or lower rank persistence. These cases are useful diagnostics because they show where the proposed mechanism becomes weak.
 
 ## How much of the result is Monte Carlo noise?
 
@@ -2675,7 +3015,7 @@ mc_uncertainty <- tibble(
 knitr::kable(
   mc_uncertainty,
   digits = 3,
-  caption = "Typical outcome size versus variation across stochastic replications"
+  caption = "Typical outcome size versus variation across independent simulation replications"
 )
 ```
 
@@ -2693,7 +3033,7 @@ parameter_names <- c(
   "tau",
   "p_reward",
   "initial_delta",
-  "cost_headroom"
+  "practice_range"
 )
 
 outcome_names <- c(
@@ -2730,18 +3070,18 @@ knitr::kable(
 
 These are descriptive sensitivity diagnostics, not causal effect estimates.
 
-The quantities most strongly associated with an outcome are the assumptions we most need to justify or constrain empirically. In particular, the practice pathway is characterized not only by $\alpha_C$ but also by $H_C$, the amount of practice-related improvement that is available.
+The quantities most strongly associated with an outcome are the assumptions we most need to justify or constrain empirically. In particular, the practice pathway is characterized not only by $\alpha_C$ but also by $C_0-C_{\min}$, the amount of practice-related cost reduction that is available.
 
 Two of the strongest associations with **rank persistence** are also theoretically informative. Faster value learning is associated with lower middle-to-late rank stability ($\rho=$ `r round(parameter_associations$spearman_rho[parameter_associations$parameter == "alpha_V" & parameter_associations$outcome == "rho_middle_late"], 2)`), and higher decision temperature is likewise associated with lower rank stability ($\rho=$ `r round(parameter_associations$spearman_rho[parameter_associations$parameter == "tau" & parameter_associations$outcome == "rho_middle_late"], 2)`). In this model, faster updating toward a shared reward environment can overwrite idiosyncratic early value histories more quickly, while higher $\tau$ weakens the mapping from learned value-cost differences to behavior. Thus, mechanisms that support rapid adaptation do not necessarily stabilize individual differences; they can shorten their persistence.
 
-The long-horizon analysis below also asks whether **available practice headroom** changes how long rank information survives, rather than only how much developmental change occurs within the original horizon.
+The long-horizon analysis below also asks whether **amount of practice-related cost reduction available** changes how long rank information survives, rather than only how much developmental change occurs within the original horizon.
 
 
-## How finite is "finite"? Rank-memory timescales across parameter space
+## How long does rank persistence last across parameter settings?
 
-The default long-horizon simulation shows that rank memory eventually fades, while the finite-horizon sweep shows that $\alpha_V$ and $\tau$ are strongly related to rank stability. We now connect those results directly.
+The default long-horizon simulation shows that persistence of earlier rank ordering eventually fades, while the developmental-period sweep shows that $\alpha_V$ and $\tau$ are strongly related to rank stability. We now connect those results directly.
 
-The question is not whether every stochastic trajectory converges to an identical point. Under a shared stationary environment, agents instead fluctuate around a common long-run regime. The relevant question is:
+The question is not whether every individual trajectory converges to exactly the same point. Under a shared stable environment, agents instead fluctuate around a common long-run mean regime. The relevant question is:
 
 > **How long does information about an individual's developmental rank remain predictive?**
 
@@ -2847,6 +3187,7 @@ simulate_rank_memory_fast <- function(
   )
 
   tibble(
+    episode = center_steps,
     time_multiple = centers,
     rank_memory = rank_memory
   )
@@ -2953,7 +3294,7 @@ long_memory_metrics_df <- long_memory_curves %>%
   )
 ```
 
-### Rank memory fades at different rates
+### Persistence of earlier rank ordering fades at different rates
 
 ```{r}
 #| label: fig_long_memory_across_parameters
@@ -2962,7 +3303,7 @@ long_memory_metrics_df <- long_memory_curves %>%
 #| fig-align: center
 
 long_memory_band <- long_memory_curves %>%
-  group_by(time_multiple) %>%
+  group_by(episode, time_multiple) %>%
   summarize(
     q10 = quantile(rank_memory, 0.10, na.rm = TRUE),
     median = median(rank_memory, na.rm = TRUE),
@@ -2972,7 +3313,7 @@ long_memory_band <- long_memory_curves %>%
 
 ggplot(
   long_memory_band,
-  aes(time_multiple, median)
+  aes(episode, median)
 ) +
   geom_ribbon(
     aes(ymin = q10, ymax = q90),
@@ -2985,33 +3326,22 @@ ggplot(
   geom_line(
     linewidth = 1.0
   ) +
-  geom_line(
-    data = rank_memory %>%
-      filter(time_multiple >= 1),
-    aes(
-      x = time_multiple,
-      y = rank_memory
-    ),
-    inherit.aes = FALSE,
-    linetype = "dashed",
-    linewidth = 0.75
-  ) +
   coord_cartesian(
-    xlim = c(1, 4),
+    xlim = c(sweep_T, 4 * sweep_T),
     ylim = c(-0.10, 1)
   ) +
   theme_result() +
   labs(
-    title = "Rank memory fades on different developmental timescales",
-    subtitle = "Median and 10th-90th percentile across parameter sets; dashed line is the default model",
-    x = "Time (multiples of original developmental horizon)",
+    title = "Persistence of earlier rank ordering fades on different developmental timescales",
+    subtitle = "Median and 10th-90th percentile across parameter sets",
+    x = "Developmental episode t",
     y = "Rank correlation"
   )
 ```
 
 The model therefore makes a more precise claim than "differences are temporary": the **duration** of rank persistence is itself a property of the learning and decision dynamics.
 
-### Which parameters prolong rank memory?
+### Which parameters prolong persistence of earlier rank ordering?
 
 ```{r}
 #| label: table_long_memory_associations
@@ -3023,7 +3353,7 @@ long_memory_parameters <- c(
   "tau",
   "p_reward",
   "initial_delta",
-  "cost_headroom"
+  "practice_range"
 )
 
 long_memory_associations <- bind_rows(
@@ -3050,9 +3380,9 @@ knitr::kable(
 )
 ```
 
-For the two parameters already highlighted by the finite-horizon analysis, the long-horizon association with rank-memory AUC is $\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "alpha_V"], 2)` for $\alpha_V$ and $\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "tau"], 2)` for $\tau$. These values test whether the same learning and decision parameters that influence middle-to-late stability also determine **how long** developmental rank information survives.
+For the two parameters already highlighted by the developmental-period analysis, the long-horizon association with rank-memory AUC is $\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "alpha_V"], 2)` for $\alpha_V$ and $\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "tau"], 2)` for $\tau$. These values test whether the same learning and decision parameters that influence middle-to-late stability also determine **how long** developmental rank information survives.
 
-Available practice headroom shows a smaller positive association with rank-memory persistence ($\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "cost_headroom"], 2)`). This is consistent with the idea that when more practice-related cost reduction remains possible, engagement histories can continue to differentiate trajectories for longer before the practice process saturates. Because the association is modest, we treat it as a suggestive model pattern rather than a dominant determinant of persistence.
+Amount of practice-related cost reduction available shows a smaller positive association with rank-memory persistence ($\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "practice_range"], 2)`). This is consistent with the idea that when more practice-related cost reduction remains possible, engagement histories can continue to differentiate trajectories for longer before the practice process saturates. Because the association is modest, we treat it as a suggestive model pattern rather than a dominant determinant of persistence.
 
 ```{r}
 #| label: fig_long_memory_key_parameters
@@ -3160,7 +3490,7 @@ pattern_parameter_summary <- sweep_patterns %>%
     tau = median(tau),
     p_reward = median(p_reward),
     initial_delta = median(initial_delta),
-    cost_headroom = median(cost_headroom),
+    practice_range = median(practice_range),
     rho_middle_late = median(rho_middle_late, na.rm = TRUE),
     .groups = "drop"
   )
@@ -3174,7 +3504,7 @@ knitr::kable(
 
 The purpose of this table is not to define a sharp phase boundary from a limited random sample. It identifies the kinds of conditions under which the developmental account becomes weak.
 
-In the full sweep, the two failure patterns are qualitatively different. **Improvement-only** configurations tend to begin in more favorable conditions, with higher reward probability and a less negative initial value-cost difference; the population can therefore move upward relatively uniformly without preserving much rank structure. **Differentiation-only** configurations tend to combine lower reward probability, weaker practice learning, smaller practice headroom, and a less favorable initial value-cost difference; stochastic histories can separate children even though the population as a whole does not improve much.
+In the full sweep, the two failure patterns are qualitatively different. **Improvement-only** configurations tend to begin in more favorable conditions, with higher reward probability and a less negative initial value-cost difference; the population can therefore move upward relatively uniformly without preserving much rank structure. **Differentiation-only** configurations tend to combine lower reward probability, weaker practice learning, smaller practice-related cost-reduction range, and a less favorable initial value-cost difference; chance experience histories can separate children even though the population as a whole does not improve much.
 
 This suggests an important model distinction: **developmental improvement and developmental differentiation are not the same phenomenon.** Relatively supportive conditions can produce broad improvement without strong stabilization of individual differences, whereas harsher/weak-learning conditions can permit differentiation without normative improvement. These are descriptive implications of the model, not empirical claims about children.
 
@@ -3187,16 +3517,16 @@ This suggests an important model distinction: **developmental improvement and de
 
 ggplot(
   sweep_patterns,
-  aes(alpha_C, cost_headroom, shape = pattern)
+  aes(alpha_C, practice_range, shape = pattern)
 ) +
   geom_point(alpha = 0.55, size = 2.0) +
   scale_x_log10() +
   theme_result() +
   labs(
     title = "Where does improvement plus differentiation fail?",
-    subtitle = "Practice learning rate and available practice headroom shown as two key mechanism parameters",
+    subtitle = "Practice learning rate and amount of practice-related cost reduction available shown as two key mechanism parameters",
     x = "Practice learning rate α_C (log scale)",
-    y = "Available practice headroom H_C",
+    y = "Amount of practice-related cost reduction available",
     shape = NULL
   )
 ```
@@ -3224,8 +3554,8 @@ practice_sensitivity <- bind_rows(
     ),
   sweep_results %>%
     transmute(
-      parameter = "Available practice headroom H_C",
-      parameter_value = cost_headroom,
+      parameter = "Amount of practice-related cost reduction available",
+      parameter_value = practice_range,
       developmental_change = delta_mean,
       heterogeneity_change = sd_gain
     )
@@ -3262,7 +3592,7 @@ ggplot(
   theme_result() +
   labs(
     title = "Practice parameters shape mean development and differentiation",
-    subtitle = "Each point is one parameter set averaged across independent stochastic populations",
+    subtitle = "Each point is one parameter set averaged across independent simulated populations",
     x = NULL,
     y = NULL
   )
@@ -3270,253 +3600,6 @@ ggplot(
 
 This plot should be read as a mechanism diagnostic, not evidence that these parameters have empirical values in any particular range.
 
-# What have we learned from the minimal model?
-
-The analyses can be summarized as a sequence of theoretical tests.
-
-| Test | Result in the current model | Interpretation |
-|---|---|---|
-| **EVC-like choice only** | No developmental change | A decision rule alone does not generate development. |
-| **+ learned reward value** | Modest increase in mean engagement and heterogeneity | Reward learning contributes, but is not the main developmental driver under the current specification. |
-| **+ practice feedback** | Stronger developmental improvement and differentiation | Practice-related change in future ease of control is the main reinforcing mechanism. |
-| **Initially identical agents** | Population spreads out; ranks are moderately persistent | Stochastic experience can generate developmental differentiation without initial capacity differences. |
-| **Tiny persistent reward differences** | Modest increase in spread; clearer increase in rank persistence; different long-run mean regimes | Stable environmental differences can anchor who remains relatively high or low without capacity differences. |
-| **Temporary stress** | Large acute dip, much smaller late residual | Context can create transient EF fluctuations without a capacity change. |
-| **Early vs later reward support** | No early-support advantage at equal post-intervention lag | The minimal feedback does not imply a sensitive period. |
-| **Long horizon, shared environment (default point)** | Heterogeneity weakens and rank memory fades | Without persistent environmental differences, differentiation is developmentally persistent but not permanently locked in. |
-| **Long horizon, shared environment (parameter space)** | Rank memory fades at different rates | Stability is a timescale property; learning and decision parameters determine how long rank information remains predictive. |
-| **Wider replicated parameter region** | Most, but not all, parameter sets produce improvement + differentiation | The phenomenon is not confined to one tuned parameter point, and failure regions identify important constraints. |
-
-The central theoretical claim is therefore narrower than "experience always creates stable EF types":
-
-> **Repeated control decisions can create substantial developmental differentiation because engagement changes later learning opportunities. This differentiation is strongest while there is still value or practice learning left to occur, can be partly anchored by persistent environmental differences, and weakens as learning saturates.**
-
-
-# Extension A: Is passive cost stabilization needed?
-
-Yuko previously asked whether a baseline cost level and mean reversion are necessary. We therefore keep this as an **extension**, not part of the core model.
-
-The extension adds
-
-$$
-C_{t+1}
-=
-C_t
-+
-\eta_C(C_{\mathrm{set}}-C_t)
--
-\alpha_C A_t(C_t-C_{\min}).
-$$
-
-This is different from the discarded rule $A_t=0\Rightarrow C_{t+1}>C_t$: non-engagement is not itself assigned a penalty. Instead, practice-related cost reductions partly decay unless they are reinforced.
-
-```{r}
-#| label: run_cost_stabilization
-#| echo: true
-
-df_practice_only <- simulate_population(
-  model = "value_cost",
-  N = 1000,
-  p_reward_sd = 0,
-  seed = 1201
-)
-
-df_cost_stabilized <- simulate_population(
-  model = "value_cost_stabilized",
-  N = 1000,
-  p_reward_sd = 0,
-  seed = 1201
-)
-
-diag_stabilization <- bind_rows(
-  df_practice_only,
-  df_cost_stabilized
-) %>%
-  group_by(model_label, dev_time) %>%
-  summarize(
-    mean_pi = mean(pi),
-    sd_pi = sd(pi),
-    .groups = "drop"
-  ) %>%
-  pivot_longer(
-    cols = c(mean_pi, sd_pi),
-    names_to = "measure",
-    values_to = "value"
-  ) %>%
-  mutate(
-    measure = recode(
-      measure,
-      mean_pi = "Population mean propensity",
-      sd_pi = "Between-child SD in propensity"
-    )
-  )
-
-ggplot(
-  diag_stabilization,
-  aes(dev_time, value, color = model_label)
-) +
-  geom_line(linewidth = 1.0) +
-  facet_wrap(~ measure, ncol = 1, scales = "free_y") +
-  scale_color_manual(values = model_cols) +
-  theme_result() +
-  labs(
-    title = "Passive cost stabilization mainly dampens the feedback",
-    x = "Developmental time (normalized)",
-    y = NULL,
-    color = NULL
-  )
-```
-
-Under the current parameterization, this extension dampens both mean developmental change and heterogeneity. It is therefore **not needed to produce the core finite-horizon result**. We should leave it outside the main model unless a clearer theoretical or empirical reason for passive cost stabilization emerges.
-
-# LEVC and observed performance: when a separate automaticity state becomes necessary
-
-The reparameterization above changes how we should think about the LEVC extension.
-
-For an **engagement-only** model, a separate automaticity state is mathematically redundant with the current practice-dependent cost state. We can write
-
-$$
-L_{t+1}
-=
-L_t+\alpha_C A_t(1-L_t)
-$$
-
-and
-
-$$
-C_t
-=
-C_{\min}
-+
-H_C(1-L_t).
-$$
-
-Adding both $L_t$ and $C_t$ would therefore add notation without adding a new mechanism.
-
-A distinct automaticity state becomes useful when we want to model **observed EF task performance**. LEVC explicitly treats accuracy as a joint function of automaticity and control intensity. In a developmental extension, we could therefore distinguish:
-
-$$
-\text{propensity to engage control}
-$$
-
-from
-
-$$
-\text{task-specific automaticity}
-$$
-
-and let observed performance depend on both:
-
-$$
-P(\mathrm{correct})
-=
-f(\text{control allocated},L_t,\text{task difficulty}).
-$$
-
-This allows an important developmental possibility:
-
-$$
-L_t\uparrow
-\Rightarrow
-\text{equal or better performance with less control}.
-$$
-
-If we take this route, $C_t$ should no longer silently duplicate automaticity. We would need to decide whether $C$ represents an **inherent subjective cost of control intensity**, while $L$ represents learned task efficiency.
-
-That is a different model and should only be introduced if the target phenomenon is observed EF **performance**, rather than the decision to engage control.
-
-# Current interpretation
-
-The current analyses support a more specific account than the earlier capacity-based model.
-
-## 1. The practice pathway has a clearer reduced-form interpretation
-
-The strongest developmental differentiation appears when actual engagement changes the future ease of control.
-
-The original cost equation can be re-expressed exactly as a bounded practice-accumulation process:
-
-$$
-\text{engage}
-\rightarrow
-\text{practice / learned-efficiency accumulation}
-\rightarrow
-\text{lower effective future effort}
-\rightarrow
-\text{greater future engagement}.
-$$
-
-This is close in spirit to LEVC's assumption that task experience increases automaticity and reduces the control needed for equivalent performance, but our model is a reduced-form developmental extension rather than an implementation of LEVC.
-
-## 2. Value learning alone is not doing most of the developmental work
-
-Learning whether EF pays off changes future engagement, but under the current model the much stronger developmental feedback comes from practice changing future ease of engagement.
-
-That makes the practice/learned-efficiency mechanism the central theoretical assumption to constrain.
-
-## 3. Initially identical children can become substantially different
-
-Stochastic engagement and reward histories are enough to broaden the population distribution over a developmental horizon. The resulting rank ordering is moderately persistent, not fixed.
-
-## 4. Small persistent environmental differences can anchor those differences
-
-A narrow distribution of reward probabilities only modestly increases total spread, but it can increase rank persistence and predict later engagement. This is closer to a **stabilization/anchoring** result than a dramatic amplification result.
-
-## 5. Temporary stress mainly produces a temporary EF-engagement dip
-
-A smaller residual effect can remain through missed learning and practice opportunities. No age-sensitive capacity window is needed for this pattern.
-
-## 6. The minimal feedback does not create an early sensitive period
-
-Equal early and later reward support do not show an early-support advantage. A strong timing effect would therefore require an additional developmental mechanism rather than following automatically from experience-dependent feedback.
-
-## 7. Developmental differentiation is self-limiting
-
-The net-value equation
-
-$$
-\mathbb{E}[\Delta D_t]
-=
-\pi_t H_t
-$$
-
-makes the reason explicit. While there is value or practice learning left to occur, children who engage more receive more updates and can move farther ahead. As the learning headroom $H_t$ shrinks, that reinforcing advantage weakens.
-
-Over a longer stationary horizon, cross-sectional heterogeneity decreases and rank memory fades. Across the wider parameter region, however, the **rate of that decay varies**. Stability in this model is therefore best understood as a timescale-relative property: differences can be persistent over a developmental period without representing permanently distinct attractors.
-
-## 8. The robustness question is now separated from Monte Carlo noise
-
-The wider parameter analysis averages several independent populations for each parameter vector and varies initial net value separately from available practice headroom.
-
-This tells us more clearly whether the phenomenon belongs to a region of the model rather than to one stochastic run or one hand-selected parameter point.
-
-# What this model does not yet establish
-
-These simulations are theoretical demonstrations. They do not show that:
-
-- generalized EF practice in children actually behaves like task-specific automaticity in LEVC;
-- the proposed mapping from practice to effective subjective cost is the true developmental mechanism;
-- the current parameter ranges correspond to children or to any particular age range;
-- observed EF task scores directly measure engagement propensity;
-- reward probability is the only or primary environmental source of individual differences;
-- the current dynamics are uniquely supported relative to alternative control-learning models.
-
-The replicated parameter analysis tests sensitivity of the mechanism, not empirical validity. Developmental or experimental data would still be required to constrain the learning rates, practice headroom, environmental inputs, and mapping from latent engagement to observed EF behavior.
-
-# Recommended next steps
-
-1. **Decide what the practice state represents psychologically.** The model only requires a saturating practice-related change in future ease of engagement. If we interpret this as generalized EF automaticity or efficiency, we need to justify transfer across contexts because LEVC itself is task-specific.
-2. **Keep the reduced-form $C$ representation for now.** Adding a separate automaticity node would be mathematically redundant unless we also model EF performance.
-3. **Check a more canonical LVOC value-learning implementation.** The current delta rule captures the basic experience-learning idea but not LVOC's full feature-based value approximation.
-4. **Only add age-dependent plasticity if we explicitly want to explain an early-intervention advantage.** The current feedback does not generate one by itself.
-5. **Use candidate longitudinal or experimental data to constrain the mechanisms only after the engagement-versus-performance target is settled.**
-
-# Working interpretation for the paper
-
-A framing consistent with the current model is:
-
-> Existing theories explain how people allocate cognitive control and how experience changes the future value or efficiency of control. We ask what these processes imply when repeated over developmental timescales. In a minimal model, stochastic experience can generate substantial and moderately persistent differentiation in EF engagement even when agents begin identically. The key reinforcing mechanism is practice: engaging control creates more opportunities for experience-dependent improvement, which can make future engagement easier and therefore more likely. Small persistent environmental differences can anchor relative differences across individuals by sustaining different long-run mean engagement regimes. Under a shared environment, the feedback is self-limiting as learning opportunities are exhausted, and the timescale over which rank differences fade depends on the learning and decision parameters. The same feedback does not by itself create an early sensitive-period advantage.
-
-A stronger empirical claim would require evidence that the practice-to-effective-cost mechanism generalizes across the EF contexts relevant to development.
 
 # References
 
