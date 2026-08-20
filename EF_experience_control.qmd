@@ -2127,7 +2127,7 @@ The main effect is immediate: engagement propensity drops sharply while the stre
 
 ## Is there any difference left after the stressor ends?
 
-The remaining difference is much smaller than the acute drop, so we plot only the **post-stress period** on a tighter y-axis.
+The remaining difference is much smaller than the acute drop, so we show only the **post-stress period** on a tighter y-axis.
 
 ```{r}
 #| label: fig_stress_residual
@@ -2135,54 +2135,56 @@ The remaining difference is much smaller than the acute drop, so we plot only th
 #| fig-height: 4.2
 #| fig-align: center
 
-stress_difference <- stress_summary %>%
-  select(condition, step, mean_pi) %>%
+stress_post <- stress_summary %>%
+  filter(
+    condition %in% c("Reference", "Temporary stress"),
+    step > stress_end
+  ) %>%
+  select(condition, step, mean_pi)
+
+stress_residual_wide <- stress_post %>%
   pivot_wider(
     names_from = condition,
     values_from = mean_pi
-  ) %>%
-  transmute(
-    step = step,
-    delta_pi = `Temporary stress` - Reference
-  ) %>%
-  filter(step > stress_end)
+  )
 
 late_window_start_stress <- round(0.85 * T_stress)
 
-late_residual <- stress_difference %>%
+late_residual <- stress_residual_wide %>%
   filter(step >= late_window_start_stress) %>%
-  summarize(mean_delta = mean(delta_pi)) %>%
+  summarize(
+    mean_delta = mean(`Temporary stress` - Reference)
+  ) %>%
   pull(mean_delta)
 
-residual_min <- min(stress_difference$delta_pi, na.rm = TRUE)
-residual_max <- max(stress_difference$delta_pi, na.rm = TRUE)
-
 ggplot(
-  stress_difference,
-  aes(step, delta_pi)
+  stress_post,
+  aes(step, mean_pi, color = condition)
 ) +
-  geom_hline(
-    yintercept = 0,
-    linewidth = 0.35,
-    color = "black"
+  geom_line(linewidth = 1.0) +
+  scale_color_manual(
+    values = c(
+      "Reference" = "#4B5563",
+      "Temporary stress" = "#B54A4A"
+    )
   ) +
-  geom_line(
-    linewidth = 1.0,
-    color = "#B54A4A"
+  coord_cartesian(
+    ylim = range(stress_post$mean_pi, na.rm = TRUE) + c(-0.002, 0.002)
   ) +
   theme_result(base_size = 13) +
   labs(
-    title = "A small difference remains after stress ends",
+    title = "Only a small separation remains after stress ends",
     subtitle = paste0(
-      "Stress minus reference; late-window mean difference = ",
+      "Late-window mean difference (stress - reference) = ",
       round(late_residual, 3)
     ),
     x = "Developmental episode t",
-    y = "Difference in EF engagement propensity"
+    y = "Mean EF engagement propensity",
+    color = NULL
   )
 ```
 
-The residual is small but visible once the acute stress period is removed from the plot. In this model, it occurs because children in the stress condition engaged less during the stress window and therefore accumulated slightly fewer learning and practice opportunities. The main result remains the **temporary engagement dip**, not a large lasting effect.
+This zoomed view keeps the original two trajectories rather than plotting their difference directly. It shows that after the stressor ends, the stress condition remains slightly below the reference trajectory. In this model, that residual gap comes from reduced learning and practice during the stress period. The main result remains the **temporary engagement dip**, not a large lasting effect.
 
 # Result 5: The minimal model does not give early support a special advantage
 
@@ -3021,71 +3023,15 @@ knitr::kable(
 
 The replicated design separates **parameter sensitivity** from **simulation noise**. Rank persistence is expected to be noisier than the population mean because it depends on the identities and ordering of individual trajectories.
 
-## Which assumptions matter most?
+## How quickly does earlier rank ordering fade?
 
-```{r}
-#| label: table_parameter_associations
-#| echo: true
+Result 2 showed that, under a shared environment, children can keep their relative high/low positions for a while but that this ordering eventually becomes less predictive. Here we ask whether that conclusion also holds across the wider parameter sweep.
 
-parameter_names <- c(
-  "alpha_V",
-  "alpha_C",
-  "tau",
-  "p_reward",
-  "initial_delta",
-  "practice_range"
-)
+For every parameter set, we take children's average engagement near the end of the original 900-episode simulation as the **reference ranking**. We then continue the same model much longer and repeatedly ask:
 
-outcome_names <- c(
-  "delta_mean",
-  "sd_gain",
-  "rho_middle_late"
-)
+> If a child was relatively high or low around episode 900, how well does that ranking predict where the child stands later?
 
-parameter_associations <- bind_rows(
-  lapply(parameter_names, function(p_name) {
-    bind_rows(
-      lapply(outcome_names, function(o_name) {
-        tibble(
-          parameter = p_name,
-          outcome = o_name,
-          spearman_rho = cor(
-            sweep_results[[p_name]],
-            sweep_results[[o_name]],
-            method = "spearman",
-            use = "complete.obs"
-          )
-        )
-      })
-    )
-  })
-)
-
-knitr::kable(
-  parameter_associations,
-  digits = 2,
-  caption = "Parameter-outcome associations across the wider replicated sweep"
-)
-```
-
-These are descriptive sensitivity diagnostics, not causal effect estimates.
-
-The quantities most strongly associated with an outcome are the assumptions we most need to justify or constrain empirically. In particular, the practice pathway is characterized not only by $\alpha_C$ but also by $C_0-C_{\min}$, the amount of practice-related cost reduction that is available.
-
-Two of the strongest associations with **rank persistence** are also theoretically informative. Faster value learning is associated with lower middle-to-late rank stability ($\rho=$ `r round(parameter_associations$spearman_rho[parameter_associations$parameter == "alpha_V" & parameter_associations$outcome == "rho_middle_late"], 2)`), and higher decision temperature is likewise associated with lower rank stability ($\rho=$ `r round(parameter_associations$spearman_rho[parameter_associations$parameter == "tau" & parameter_associations$outcome == "rho_middle_late"], 2)`). In this model, faster updating toward a shared reward environment can overwrite idiosyncratic early value histories more quickly, while higher $\tau$ weakens the mapping from learned value-cost differences to behavior. Thus, mechanisms that support rapid adaptation do not necessarily stabilize individual differences; they can shorten their persistence.
-
-The long-horizon analysis below also asks whether **amount of practice-related cost reduction available** changes how long rank information survives, rather than only how much developmental change occurs within the original horizon.
-
-
-## How long does rank persistence last across parameter settings?
-
-The default long-horizon simulation shows that persistence of earlier rank ordering eventually fades, while the developmental-period sweep shows that $\alpha_V$ and $\tau$ are strongly related to rank stability. We now connect those results directly.
-
-The question is not whether every individual trajectory converges to exactly the same point. Under a shared stable environment, agents instead fluctuate around a common long-run mean regime. The relevant question is:
-
-> **How long does information about an individual's developmental rank remain predictive?**
-
-To keep this analysis computationally manageable, we use a sweep-specific simulator that stores only window-averaged engagement scores rather than full trajectories.
+The correlation is therefore high when the same children tend to remain relatively high or low, and close to zero when the earlier ordering no longer predicts the later ordering.
 
 ```{r}
 #| label: long_memory_sweep_helpers
@@ -3114,8 +3060,6 @@ simulate_rank_memory_fast <- function(
   V <- rep(V0, N)
   C <- rep(C0, N)
 
-  # T0 points contain T0 - 1 intervals. Use the interval scale
-  # throughout so that 1x, 2x, ..., horizon_multiple are exact.
   base_intervals <- T0 - 1
   total_T <- round(horizon_multiple * base_intervals) + 1L
 
@@ -3171,10 +3115,11 @@ simulate_rank_memory_fast <- function(
 
   reference_score <- ref_sum / ref_n
 
-  rank_memory <- vapply(
+  rank_persistence <- vapply(
     seq_along(centers),
     function(kk) {
       later_score <- score_sums[, kk] / score_n[kk]
+
       suppressWarnings(
         cor(
           reference_score,
@@ -3189,44 +3134,24 @@ simulate_rank_memory_fast <- function(
   tibble(
     episode = center_steps,
     time_multiple = centers,
-    rank_memory = rank_memory
+    rank_persistence = rank_persistence
   )
 }
 
-rank_memory_metrics <- function(curve_df) {
+rank_persistence_metrics <- function(curve_df) {
 
   curve_df <- curve_df %>%
     arrange(time_multiple)
 
-  t <- curve_df$time_multiple
-  r <- curve_df$rank_memory
-
-  positive_r <- pmax(r, 0)
-
-  memory_auc <- sum(
-    diff(t) *
-      (head(positive_r, -1) + tail(positive_r, -1)) / 2
-  ) / (max(t) - min(t))
-
   get_nearest <- function(target) {
-    r[which.min(abs(t - target))]
+    curve_df$rank_persistence[
+      which.min(abs(curve_df$time_multiple - target))
+    ]
   }
 
-  below_20 <- which(
-    t >= 1 & r < 0.20
-  )
-
   tibble(
-    memory_auc = memory_auc,
     rho_2x = get_nearest(2),
-    rho_3x = get_nearest(3),
-    first_below_20 = if (
-      length(below_20) > 0
-    ) {
-      t[min(below_20)]
-    } else {
-      NA_real_
-    }
+    rho_3x = get_nearest(3)
   )
 }
 ```
@@ -3285,7 +3210,7 @@ long_memory_curves <- bind_rows(
 long_memory_metrics_df <- long_memory_curves %>%
   group_by(set_id) %>%
   group_modify(
-    ~ rank_memory_metrics(.x)
+    ~ rank_persistence_metrics(.x)
   ) %>%
   ungroup() %>%
   left_join(
@@ -3294,20 +3219,18 @@ long_memory_metrics_df <- long_memory_curves %>%
   )
 ```
 
-### Persistence of earlier rank ordering fades at different rates
-
 ```{r}
 #| label: fig_long_memory_across_parameters
-#| fig-width: 8.8
-#| fig-height: 5.0
+#| fig-width: 8.6
+#| fig-height: 4.8
 #| fig-align: center
 
 long_memory_band <- long_memory_curves %>%
   group_by(episode, time_multiple) %>%
   summarize(
-    q10 = quantile(rank_memory, 0.10, na.rm = TRUE),
-    median = median(rank_memory, na.rm = TRUE),
-    q90 = quantile(rank_memory, 0.90, na.rm = TRUE),
+    q10 = quantile(rank_persistence, 0.10, na.rm = TRUE),
+    median = median(rank_persistence, na.rm = TRUE),
+    q90 = quantile(rank_persistence, 0.90, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -3332,83 +3255,62 @@ ggplot(
   ) +
   theme_result() +
   labs(
-    title = "Persistence of earlier rank ordering fades on different developmental timescales",
-    subtitle = "Median and 10th-90th percentile across parameter sets",
+    title = "Earlier rank ordering becomes less predictive over time",
+    subtitle = "Black line = median across parameter sets; band = 10th-90th percentile",
     x = "Developmental episode t",
-    y = "Rank correlation"
+    y = "Correlation with the earlier ranking"
   )
 ```
 
-The model therefore makes a more precise claim than "differences are temporary": the **duration** of rank persistence is itself a property of the learning and decision dynamics.
+Across the parameter sweep, the same general pattern appears: earlier rank ordering becomes progressively less predictive as the simulation continues. The wide band shows that **the speed of this decline differs substantially across parameter settings**.
 
-### Which parameters prolong persistence of earlier rank ordering?
+So the useful conclusion is not that every simulation loses rank ordering at exactly the same time. It is that under a shared environment, earlier high/low positions generally fade, while the model parameters affect **how quickly** they fade.
 
-```{r}
-#| label: table_long_memory_associations
-#| echo: true
+### Which parameters are most clearly related to faster fading?
 
-long_memory_parameters <- c(
-  "alpha_V",
-  "alpha_C",
-  "tau",
-  "p_reward",
-  "initial_delta",
-  "practice_range"
-)
+Rather than show a large table of every parameter-outcome correlation, we focus on the two clearest associations from the sweep: the value-learning rate $\alpha_V$ and decision temperature $\tau$.
 
-long_memory_associations <- bind_rows(
-  lapply(
-    long_memory_parameters,
-    function(p_name) {
-      tibble(
-        parameter = p_name,
-        spearman_rho_with_memory_auc = cor(
-          long_memory_metrics_df[[p_name]],
-          long_memory_metrics_df$memory_auc,
-          method = "spearman",
-          use = "complete.obs"
-        )
-      )
-    }
-  )
-)
-
-knitr::kable(
-  long_memory_associations,
-  digits = 2,
-  caption = "Parameter associations with long-horizon rank-memory persistence"
-)
-```
-
-For the two parameters already highlighted by the developmental-period analysis, the long-horizon association with rank-memory AUC is $\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "alpha_V"], 2)` for $\alpha_V$ and $\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "tau"], 2)` for $\tau$. These values test whether the same learning and decision parameters that influence middle-to-late stability also determine **how long** developmental rank information survives.
-
-Amount of practice-related cost reduction available shows a smaller positive association with rank-memory persistence ($\rho=$ `r round(long_memory_associations$spearman_rho_with_memory_auc[long_memory_associations$parameter == "practice_range"], 2)`). This is consistent with the idea that when more practice-related cost reduction remains possible, engagement histories can continue to differentiate trajectories for longer before the practice process saturates. Because the association is modest, we treat it as a suggestive model pattern rather than a dominant determinant of persistence.
+To keep the outcome easy to interpret, the y-axis below is simply the correlation between children's ranking near the end of the original simulation and their ranking around **three times that simulation length** (approximately episode `r 3 * sweep_T`).
 
 ```{r}
 #| label: fig_long_memory_key_parameters
-#| fig-width: 8.8
+#| fig-width: 8.6
 #| fig-height: 4.7
 #| fig-align: center
 #| message: false
+
+rho_alphaV_3x <- cor(
+  long_memory_metrics_df$alpha_V,
+  long_memory_metrics_df$rho_3x,
+  method = "spearman",
+  use = "complete.obs"
+)
+
+rho_tau_3x <- cor(
+  long_memory_metrics_df$tau,
+  long_memory_metrics_df$rho_3x,
+  method = "spearman",
+  use = "complete.obs"
+)
 
 long_memory_key <- bind_rows(
   long_memory_metrics_df %>%
     transmute(
       parameter = "Value-learning rate α_V",
       parameter_value = alpha_V,
-      memory_auc = memory_auc
+      rank_correlation_3x = rho_3x
     ),
   long_memory_metrics_df %>%
     transmute(
       parameter = "Decision temperature τ",
       parameter_value = tau,
-      memory_auc = memory_auc
+      rank_correlation_3x = rho_3x
     )
 )
 
 ggplot(
   long_memory_key,
-  aes(parameter_value, memory_auc)
+  aes(parameter_value, rank_correlation_3x)
 ) +
   geom_point(
     alpha = 0.35,
@@ -3423,117 +3325,38 @@ ggplot(
     ~ parameter,
     scales = "free_x"
   ) +
+  coord_cartesian(
+    ylim = c(-0.15, 0.85)
+  ) +
   theme_result() +
   labs(
-    title = "Learning and decision dynamics set the persistence timescale",
-    x = NULL,
-    y = "Normalized rank-memory AUC"
-  )
-```
-
-This analysis connects the single-parameter long-horizon result to the wider robustness analysis. The important developmental question is therefore not whether rank ordering is permanent, but **whether its persistence timescale is long relative to the developmental period of interest**.
-
-
-## Where does the developmental pattern fail?
-
-A robustness percentage is easier to interpret if we also inspect the parameter regions that **do not** produce the target pattern.
-
-We classify each parameter set according to whether it produces:
-
-- developmental improvement: $\Delta\bar\pi>0$;
-- increased heterogeneity: $\Delta SD(\pi)>0$.
-
-```{r}
-#| label: parameter_pattern_regions
-#| echo: true
-
-sweep_patterns <- sweep_results %>%
-  mutate(
-    pattern = case_when(
-      delta_mean > 0 & sd_gain > 0 ~ "Improvement + differentiation",
-      delta_mean > 0 & sd_gain <= 0 ~ "Improvement only",
-      delta_mean <= 0 & sd_gain > 0 ~ "Differentiation only",
-      TRUE ~ "Neither"
+    title = "Faster value updating and higher decision temperature are linked to faster loss of rank ordering",
+    subtitle = paste0(
+      "Spearman associations with rank persistence at ~3× the original horizon: ",
+      "α_V = ",
+      round(rho_alphaV_3x, 2),
+      "; τ = ",
+      round(rho_tau_3x, 2)
     ),
-    pattern = factor(
-      pattern,
-      levels = c(
-        "Improvement + differentiation",
-        "Improvement only",
-        "Differentiation only",
-        "Neither"
-      )
-    )
-  )
-
-pattern_counts <- sweep_patterns %>%
-  count(pattern, .drop = FALSE) %>%
-  mutate(proportion = n / sum(n))
-
-knitr::kable(
-  pattern_counts,
-  digits = 3,
-  caption = "Qualitative outcomes across the wider replicated parameter sweep"
-)
-```
-
-```{r}
-#| label: table_pattern_parameters
-#| echo: true
-
-pattern_parameter_summary <- sweep_patterns %>%
-  group_by(pattern) %>%
-  summarize(
-    n = n(),
-    alpha_V = median(alpha_V),
-    alpha_C = median(alpha_C),
-    tau = median(tau),
-    p_reward = median(p_reward),
-    initial_delta = median(initial_delta),
-    practice_range = median(practice_range),
-    rho_middle_late = median(rho_middle_late, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-knitr::kable(
-  pattern_parameter_summary,
-  digits = 3,
-  caption = "Median parameter values in success and failure regions"
-)
-```
-
-The purpose of this table is not to define a sharp phase boundary from a limited random sample. It identifies the kinds of conditions under which the developmental account becomes weak.
-
-In the full sweep, the two failure patterns are qualitatively different. **Improvement-only** configurations tend to begin in more favorable conditions, with higher reward probability and a less negative initial value-cost difference; the population can therefore move upward relatively uniformly without preserving much rank structure. **Differentiation-only** configurations tend to combine lower reward probability, weaker practice learning, smaller practice-related cost-reduction range, and a less favorable initial value-cost difference; chance experience histories can separate children even though the population as a whole does not improve much.
-
-This suggests an important model distinction: **developmental improvement and developmental differentiation are not the same phenomenon.** Relatively supportive conditions can produce broad improvement without strong stabilization of individual differences, whereas harsher/weak-learning conditions can permit differentiation without normative improvement. These are descriptive implications of the model, not empirical claims about children.
-
-```{r}
-#| label: fig_pattern_regions
-#| fig-width: 9.0
-#| fig-height: 5.8
-#| fig-align: center
-#| message: false
-
-ggplot(
-  sweep_patterns,
-  aes(alpha_C, practice_range, shape = pattern)
-) +
-  geom_point(alpha = 0.55, size = 2.0) +
-  scale_x_log10() +
-  theme_result() +
-  labs(
-    title = "Where does improvement plus differentiation fail?",
-    subtitle = "Practice learning rate and amount of practice-related cost reduction available shown as two key mechanism parameters",
-    x = "Practice learning rate α_C (log scale)",
-    y = "Amount of practice-related cost reduction available",
-    shape = NULL
+    x = NULL,
+    y = "Correlation with earlier ranking at ~3× horizon"
   )
 ```
 
-This is a diagnostic view of the sampled parameter region. It should not be interpreted as an empirical developmental phase diagram.
+In this model, larger $\alpha_V$ means that recent reward experience updates $V_t$ more quickly, so earlier value histories are overwritten faster. Larger $\tau$ makes engagement less sensitive to differences in $V_t-C_t$, so earlier relative differences in learned value and cost are expressed less strongly in behavior.
+
+These are **descriptive model sensitivities**, not estimates of developmental effects in children. The main reason to retain them is that they show why some parameter settings preserve individual ordering longer than others.
 
 ## Direct check of the practice mechanism
+
+Because the theoretical account depends on practice making later engagement easier, it is useful to look directly at the two practice-related parameters. The figure below asks a simple question:
+
+- When practice reduces future effort cost **faster** ($\alpha_C$), do we see more developmental change?
+- When there is **more room** for practice to reduce future effort cost ($C_0 - C_{\min}$), do we see more developmental change?
+
+The **bottom row** is the main part to look at: it shows how these two practice parameters relate to the increase in **mean EF engagement** from early to late development. The **top row** shows their relation to the increase in between-child spread.
+
+
 
 Because the theoretical result depends on practice changing future ease of control, it is useful to visualize that dependency directly.
 
@@ -3591,15 +3414,18 @@ ggplot(
   facet_wrap(~ panel, ncol = 2, scales = "free") +
   theme_result() +
   labs(
-    title = "Practice parameters shape mean development and differentiation",
-    subtitle = "Each point is one parameter set averaged across independent simulated populations",
+    title = "Practice parameters mainly shape average developmental improvement",
+    subtitle = "Bottom row is the key result: stronger practice effects are associated with larger increases in mean engagement",
     x = NULL,
     y = NULL
   )
 ```
 
-This plot should be read as a mechanism diagnostic, not evidence that these parameters have empirical values in any particular range.
+The clearest pattern is in the **bottom row**: developmental improvement tends to be larger when practice reduces future effort cost more quickly ($\alpha_C$) and when more practice-related cost reduction is available ($C_0 - C_{\min}$). In other words, stronger practice effects are associated with larger increases in mean EF engagement.
 
+The **top row** is less clean. The same practice parameters show a weaker and noisier relation to the increase in between-child spread. So the safest interpretation is that these practice parameters primarily control **how much the population improves on average**, while their association with differentiation is more variable.
+
+This remains a diagnostic view of the model rather than an empirical claim about the true values of these parameters in children.
 
 # References
 
