@@ -103,8 +103,8 @@ environment_cols <- c(
 )
 
 context_cols <- c(
-  "Reference"               = COL$dark_gray,
-  "Contextual perturbation" = COL$orange
+  "Reference"        = COL$dark_gray,
+  "Temporary stress" = COL$orange
 )
 
 support_cols <- c(
@@ -565,6 +565,29 @@ save_pub(fig1, "Figure1_DEV_Control_schematic", width = 7.1, height = 3.7)
 
 
 # -----------------------------------------------------------------------------
+# 4. CORE MODEL RUNS USED IN FIGURE 2
+# -----------------------------------------------------------------------------
+
+core_models <- c("evc", "value", "value_cost")
+
+df_models <- bind_rows(
+  lapply(core_models, function(m) {
+    simulate_population(
+      model = m,
+      p_reward_sd = 0,
+      seed = 4100
+    )
+  })
+)
+
+summary_models <- population_summary(df_models)
+
+model_metrics <- bind_rows(
+  lapply(split(df_models, df_models$model_label), development_metrics),
+  .id = "model_label"
+)
+
+# -----------------------------------------------------------------------------
 # Figure 2: What does each mechanism add?
 # -----------------------------------------------------------------------------
 
@@ -632,7 +655,7 @@ fig2 <- ggplot() +
   ) +
   
   labs(
-    x = "Developmental episode",
+    x = "Experience episode",
     y = "EF engagement propensity"
   ) +
   
@@ -690,7 +713,7 @@ p3a <- ggplot() +
     linewidth = 0.50
   ) +
   coord_cartesian(ylim = c(0, 1)) +
-  labs(x = "Developmental episode", y = "Engagement propensity") +
+  labs(x = "Experience episode", y = "Engagement propensity") +
   theme_pub(base_size = 8.8) +
   theme(legend.position = "none")
 
@@ -744,21 +767,23 @@ p3c <- ggplot(scores_identical, aes(middle_rank, late_rank)) +
   labs(x = "Middle-stage rank percentile", y = "Late-stage rank percentile") +
   theme_pub(base_size = 8.8)
 
-# D: long-run fading of earlier rank ordering
+# D: long-run fading of earlier rank ordering.
 # Replicate the long-horizon simulation so the plotted decline reflects the
-# typical stochastic pattern rather than one unusually smooth/noisy realization.
+# typical stochastic pattern rather than one particular realization.
 
 T_long <- 4 * (default_pars$T - 1) + 1
 
 n_rank_reps <- 20
 rank_rep_N  <- 1000
 
-memory_centers <- seq(0.90, 4.00, by = 0.20)
+# Start at 1.0x so the plotted curve is strictly subsequent to the reference
+# window used to define the earlier ranking.
+memory_centers <- seq(1.00, 4.00, by = 0.20)
 memory_half_width <- 0.06
 
 rank_memory_reps <- bind_rows(
   lapply(seq_len(n_rank_reps), function(rep_i) {
-    
+
     df_long_rep <- simulate_population(
       model = "value_cost",
       N = rank_rep_N,
@@ -767,44 +792,35 @@ rank_memory_reps <- bind_rows(
       record_every = 10,
       seed = 1400 + rep_i
     )
-    
-    # Reference ranking near the end of the original developmental horizon.
+
     reference_rank_scores <- df_long_rep %>%
       filter(
         step >= round(0.80 * (default_pars$T - 1)) + 1,
         step <= round(0.95 * (default_pars$T - 1)) + 1
       ) %>%
       group_by(child_id) %>%
-      summarize(
-        reference_score = mean(pi),
-        .groups = "drop"
-      )
-    
+      summarize(reference_score = mean(pi), .groups = "drop")
+
     bind_rows(
       lapply(memory_centers, function(center_i) {
-        
+
         center_step <- round(center_i * (default_pars$T - 1)) + 1
-        half_width_steps <- round(
-          memory_half_width * (default_pars$T - 1)
-        )
-        
+        half_width_steps <- round(memory_half_width * (default_pars$T - 1))
+
         later_scores <- df_long_rep %>%
           filter(
             step >= center_step - half_width_steps,
             step <= center_step + half_width_steps
           ) %>%
           group_by(child_id) %>%
-          summarize(
-            later_score = mean(pi),
-            .groups = "drop"
-          )
-        
+          summarize(later_score = mean(pi), .groups = "drop")
+
         joined <- inner_join(
           reference_rank_scores,
           later_scores,
           by = "child_id"
         )
-        
+
         tibble(
           replication = rep_i,
           episode = center_step,
@@ -821,7 +837,6 @@ rank_memory_reps <- bind_rows(
   })
 )
 
-# Summarize the replicated rank-memory curves.
 rank_memory_summary <- rank_memory_reps %>%
   group_by(episode) %>%
   summarize(
@@ -831,67 +846,75 @@ rank_memory_summary <- rank_memory_reps %>%
     .groups = "drop"
   )
 
-p3d <- ggplot(
-  rank_memory_summary,
-  aes(episode, median_rho)
-) +
-  
-  # Variation across stochastic replications
+p3d <- ggplot(rank_memory_summary, aes(episode, median_rho)) +
   geom_ribbon(
-    aes(
-      ymin = q25,
-      ymax = q75
-    ),
+    aes(ymin = q25, ymax = q75),
     fill = COL$orange,
     alpha = 0.14,
     linewidth = 0
   ) +
-  
-  # Zero correlation
   geom_hline(
     yintercept = 0,
     linewidth = 0.28,
     color = COL$light_gray
   ) +
-  
-  # End of the original developmental simulation
   geom_vline(
     xintercept = default_pars$T,
     linetype = "dashed",
     linewidth = 0.28,
     color = COL$gray
   ) +
-  
-  # Typical rank-memory trajectory
   geom_line(
     linewidth = 0.50,
     color = COL$orange
   ) +
-  
   geom_point(
     size = 0.90,
     color = COL$orange
   ) +
-  
-  coord_cartesian(
-    ylim = c(-0.1, 1)
-  ) +
-  
+  coord_cartesian(ylim = c(-0.10, 1)) +
   labs(
     x = "Experience episode",
     y = "Correlation with earlier rank"
   ) +
-  
   theme_pub(base_size = 8.8)
 
 fig3 <- ((p3a | p3b) / (p3c | p3d)) +
   plot_annotation(tag_levels = "A") &
   panel_tag_theme
 
-save_pub(fig3, "Figure3_emergence_and_persistence", width = 7.1, height = 6.4)
+save_pub(
+  fig3,
+  "Figure3_emergence_and_persistence",
+  width = 7.1,
+  height = 6.4
+)
+
+write.csv(
+  rank_memory_reps,
+  file.path(OUT_DIR, "Figure3_rank_memory_replications.csv"),
+  row.names = FALSE
+)
+
+write.csv(
+  rank_memory_summary,
+  file.path(OUT_DIR, "Figure3_rank_memory_summary.csv"),
+  row.names = FALSE
+)
 
 # Supplementary long-run cross-sectional spread.
-long_sd <- df_long %>%
+# This is a representative long-run population used only to show how
+# cross-sectional dispersion changes with time.
+df_long_supp <- simulate_population(
+  model = "value_cost",
+  N = 1000,
+  T = T_long,
+  p_reward_sd = 0,
+  record_every = 10,
+  seed = 1400
+)
+
+long_sd <- df_long_supp %>%
   group_by(step) %>%
   summarize(sd_pi = sd(pi), .groups = "drop")
 
@@ -900,13 +923,21 @@ supp_long_sd <- ggplot(long_sd, aes(step, sd_pi)) +
   geom_vline(
     xintercept = default_pars$T,
     linetype = "dashed",
-    linewidth = 0.3,
+    linewidth = 0.30,
     color = COL$gray
   ) +
-  labs(x = "Developmental episode", y = "Between-agent SD") +
+  labs(
+    x = "Experience episode",
+    y = "Between-agent SD"
+  ) +
   theme_pub()
 
-save_pub(supp_long_sd, "Supplement_long_horizon_between_agent_SD", width = 6.1, height = 3.4)
+save_pub(
+  supp_long_sd,
+  "Supplement_long_horizon_between_agent_SD",
+  width = 6.1,
+  height = 3.4
+)
 
 
 # -----------------------------------------------------------------------------
@@ -914,34 +945,57 @@ save_pub(supp_long_sd, "Supplement_long_horizon_between_agent_SD", width = 6.1, 
 # -----------------------------------------------------------------------------
 
 reward_sd_grid <- seq(0, 0.06, by = 0.003)
+n_reward_sd_reps <- 5
 
-reward_sd_sensitivity <- map_dfr(reward_sd_grid, function(sd_p) {
-  df_sd <- simulate_population(
-    model = "value_cost",
-    N = 1000,
-    p_reward_sd = sd_p,
-    seed = 601
-  )
+# Replicate each environmental-heterogeneity setting so the sensitivity curve
+# represents a systematic relation rather than one stochastic realization.
+reward_sd_sensitivity_reps <- map_dfr(reward_sd_grid, function(sd_p) {
+  map_dfr(seq_len(n_reward_sd_reps), function(rep_i) {
 
-  metrics_sd <- development_metrics(df_sd)
+    df_sd <- simulate_population(
+      model = "value_cost",
+      N = 1000,
+      p_reward_sd = sd_p,
+      seed = 6000 + rep_i
+    )
 
-  tibble(
-    imposed_sd_p = sd_p,
-    late_sd_pi = metrics_sd$late_sd,
-    rho_middle_late = metrics_sd$rho_middle_late
-  )
+    metrics_sd <- development_metrics(df_sd)
+
+    tibble(
+      imposed_sd_p = sd_p,
+      replication = rep_i,
+      late_sd_pi = metrics_sd$late_sd,
+      rho_middle_late = metrics_sd$rho_middle_late
+    )
+  })
 })
+
+reward_sd_sensitivity <- reward_sd_sensitivity_reps %>%
+  group_by(imposed_sd_p) %>%
+  summarize(
+    late_sd_pi = median(late_sd_pi, na.rm = TRUE),
+    rho_middle_late = median(rho_middle_late, na.rm = TRUE),
+    rho_q25 = quantile(rho_middle_late, 0.25, na.rm = TRUE),
+    rho_q75 = quantile(rho_middle_late, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 p4a <- ggplot(
   reward_sd_sensitivity,
   aes(imposed_sd_p, rho_middle_late)
 ) +
+  geom_ribbon(
+    aes(ymin = rho_q25, ymax = rho_q75),
+    fill = COL$blue,
+    alpha = 0.10,
+    linewidth = 0
+  ) +
   geom_line(
     linewidth = 0.45,
     color = COL$blue
   ) +
   geom_point(
-    size = 1.35,
+    size = 1.20,
     color = COL$blue
   ) +
   coord_cartesian(
@@ -952,7 +1006,6 @@ p4a <- ggplot(
     y = "Middle-to-late rank persistence"
   ) +
   theme_pub(base_size = 8.8)
-
 
 T_long_env <- 4 * (default_pars$T - 1) + 1
 
@@ -1101,19 +1154,13 @@ context_start <- round(STRESS_START_FRAC * T_context)
 context_end   <- round(STRESS_END_FRAC * T_context)
 context_duration <- context_end - context_start + 1
 
-# ------------------------------------------------------------------
-# Smooth temporary stress pulse
-# ------------------------------------------------------------------
-# Keep the same total "dose" as the old rectangular perturbation:
-# STRESS_COST for 'context_duration' episodes.
-stress_total_dose <- STRESS_COST * context_duration
-
-make_stress_pulse <- function(T, start, duration, total_dose) {
+# Smooth temporary stress pulse.
+# STRESS_COST is the PEAK additional cost, not an average-equivalent dose.
+make_stress_pulse <- function(T, start, duration, peak) {
   shape <- sin(seq(0, pi, length.out = duration))
-  pulse <- total_dose * shape / sum(shape)
-  
+
   out <- rep(0, T)
-  out[start:(start + duration - 1)] <- pulse
+  out[start:(start + duration - 1)] <- peak * shape
   out
 }
 
@@ -1121,7 +1168,7 @@ context_vec <- make_stress_pulse(
   T = T_context,
   start = context_start,
   duration = context_duration,
-  total_dose = stress_total_dose
+  peak = STRESS_COST
 )
 
 df_context_ref <- simulate_population(
@@ -1146,13 +1193,14 @@ context_summary <- df_context_all %>%
   group_by(condition, step) %>%
   summarize(mean_pi = mean(pi), .groups = "drop")
 
-# Same sampled children in both conditions
 set.seed(810)
 context_ids <- sort(sample(unique(df_context_all$child_id), 30))
+
 context_spaghetti <- df_context_all %>%
   filter(child_id %in% context_ids)
 
 late_window_start_context <- episode_at_fraction(T_context, 0.85)
+
 late_residual <- df_context_all %>%
   filter(step >= late_window_start_context) %>%
   group_by(condition) %>%
@@ -1161,59 +1209,204 @@ late_residual <- df_context_all %>%
   transmute(delta = `Temporary stress` - Reference) %>%
   pull(delta)
 
-# View window around perturbation + recovery
-context_view_start <- max(1, context_start - round(0.10 * T_context))
-context_view_end   <- min(T_context, context_end + round(0.22 * T_context))
+# Panel B is a literal magnification of the boxed region in Panel A.
+zoom_start <- max(1, context_start - round(0.05 * T_context))
+zoom_end   <- min(T_context, context_end + round(0.18 * T_context))
+
+zoom_spaghetti <- context_spaghetti %>%
+  filter(step >= zoom_start, step <= zoom_end)
+
+zoom_summary <- context_summary %>%
+  filter(step >= zoom_start, step <= zoom_end)
+
+zoom_y_range <- range(
+  c(zoom_spaghetti$pi, zoom_summary$mean_pi),
+  na.rm = TRUE
+)
+
+zoom_y_pad <- max(diff(zoom_y_range) * 0.05, 0.01)
+zoom_y_lim <- c(
+  max(0, zoom_y_range[1] - zoom_y_pad),
+  min(1, zoom_y_range[2] + zoom_y_pad)
+)
+
+# Panel A: full developmental trajectories with the stress interval marked.
+stress_fill <- "#E76F51"
+stress_line <- "#D96B2B"
 
 p5a <- ggplot() +
   
-  # Very light stress window
   annotate(
     "rect",
-    xmin = context_start, xmax = context_end,
-    ymin = -Inf, ymax = Inf,
-    fill = COL$orange, alpha = 0.025
+    xmin = context_start,
+    xmax = context_end,
+    ymin = -Inf,
+    ymax = Inf,
+    fill = stress_fill,
+    alpha = 0.08
   ) +
   
-  # Thin bar at the top
+  geom_line(
+    data = context_spaghetti,
+    aes(
+      step,
+      pi,
+      group = interaction(condition, child_id),
+      color = condition
+    ),
+    linewidth = 0.14,
+    alpha = 0.13
+  ) +
+  
+  geom_line(
+    data = context_summary,
+    aes(
+      step,
+      mean_pi,
+      color = condition
+    ),
+    linewidth = 0.52
+  ) +
+  
   annotate(
     "segment",
-    x = context_start, xend = context_end,
-    y = 0.92, yend = 0.92,
-    linewidth = 0.9, color = COL$orange
+    x = context_start,
+    xend = context_end,
+    y = 0.91,
+    yend = 0.91,
+    linewidth = 1.0,
+    color = stress_line
   ) +
   
-  # Text label for the perturbation
   annotate(
     "text",
     x = (context_start + context_end) / 2,
     y = 0.955,
     label = "Temporary stress",
-    color = COL$orange,
-    size = 2.5,
-    vjust = 0
+    color = stress_line,
+    size = 2.7
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "Reference" = COL$dark_gray,
+      "Temporary stress" = COL$orange
+    )
+  ) +
+  
+  coord_cartesian(
+    xlim = c(1, T_context),
+    ylim = c(0, 1)
+  ) +
+  
+  labs(
+    x = "Experience episode",
+    y = "EF engagement propensity"
+  ) +
+  
+  theme_pub(base_size = 8.9) +
+  
+  theme(
+    legend.position = "bottom"
+  )
+
+
+# ------------------------------------------------------------------
+# Panel B: post-stress recovery zoom
+# ------------------------------------------------------------------
+
+context_post_start <- 1000
+context_post_end   <- 1300
+
+# Use fewer sampled children in the zoomed panel so the mean lines stay visible.
+set.seed(812)
+
+context_post_ids <- sort(
+  sample(context_ids, 15)
+)
+
+context_post_summary <- context_summary %>%
+  filter(
+    step >= context_post_start,
+    step <= context_post_end
+  )
+
+context_post_spaghetti <- context_spaghetti %>%
+  filter(
+    child_id %in% context_post_ids,
+    step >= context_post_start,
+    step <= context_post_end
+  )
+
+# Use fewer sampled children in the zoomed panel so the mean lines stay visible.
+set.seed(812)
+
+context_post_ids <- sort(
+  sample(context_ids, 30)
+)
+
+context_post_summary <- context_summary %>%
+  filter(
+    step >= context_post_start,
+    step <= context_post_end
+  )
+
+context_post_spaghetti <- context_spaghetti %>%
+  filter(
+    child_id %in% context_post_ids,
+    step >= context_post_start,
+    step <= context_post_end
+  )
+
+# Tight y-range based on the population means, with a modest amount of padding.
+post_range <- range(
+  context_post_summary$mean_pi,
+  na.rm = TRUE
+)
+
+post_pad <- max(
+  diff(post_range) * 0.20,
+  0.01
+)
+
+p5b <- ggplot() +
+  
+  geom_line(
+    data = context_post_spaghetti,
+    aes(
+      step,
+      pi,
+      group = interaction(condition, child_id),
+      color = condition
+    ),
+    linewidth = 0.13,
+    alpha = 0.3
   ) +
   
   geom_line(
-    data = context_spaghetti %>%
-      filter(step >= context_view_start, step <= context_view_end),
-    aes(step, pi, group = interaction(condition, child_id), color = condition),
-    linewidth = 0.14, alpha = 0.16
+    data = context_post_summary,
+    aes(
+      step,
+      mean_pi,
+      color = condition
+    ),
+    linewidth = 0.58
   ) +
   
-  geom_line(
-    data = context_summary %>%
-      filter(step >= context_view_start, step <= context_view_end),
-    aes(step, mean_pi, color = condition),
-    linewidth = 0.50
+  scale_color_manual(
+    values = c(
+      "Reference" = COL$dark_gray,
+      "Temporary stress" = COL$orange
+    )
   ) +
   
-  scale_color_manual(values = c(
-    "Reference" = COL$dark_gray,
-    "Temporary stress" = COL$orange
-  )) +
-  
-  coord_cartesian(ylim = c(0, 1)) +
+  coord_cartesian(
+    xlim = c(1000, 1300),
+    ylim = c(
+      post_range[1] - post_pad,
+      post_range[2] + post_pad
+    )
+  ) +
   
   labs(
     x = NULL,
@@ -1221,56 +1414,55 @@ p5a <- ggplot() +
   ) +
   
   theme_pub(base_size = 8.9) +
-  theme(legend.position = "top")
+  
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y  = element_blank(),
+    axis.ticks.y = element_blank()
+  )
 
-# Post-stress panel
-context_post_start <- context_end + 1
-
-context_post_summary <- context_summary %>%
-  filter(step >= context_post_start)
-
-context_post_spaghetti <- context_spaghetti %>%
-  filter(step >= context_post_start)
-
-post_range <- range(context_post_summary$mean_pi, na.rm = TRUE)
-post_pad <- max(diff(post_range) * 0.12, 0.004)
-
-p5b <- ggplot() +
-  geom_line(
-    data = context_post_spaghetti,
-    aes(step, pi, group = interaction(condition, child_id), color = condition),
-    linewidth = 0.14, alpha = 0.16
-  ) +
-  geom_line(
-    data = context_post_summary,
-    aes(step, mean_pi, color = condition),
-    linewidth = 0.50
-  ) +
-  scale_color_manual(values = c(
-    "Reference" = COL$dark_gray,
-    "Temporary stress" = COL$orange
-  )) +
-  coord_cartesian(ylim = post_range + c(-post_pad, post_pad)) +
-  annotate(
-    "text",
-    x = T_context * 0.985,
-    y = post_range[1] + 0.15 * diff(post_range),
-    label = paste0("late difference = ", sprintf("%.3f", late_residual)),
-    hjust = 1, size = 2.45, color = COL$dark_gray
-  ) +
-  labs(
-    x = "Experience episode",
-    y = "Post-stress engagement"
-  ) +
-  theme_pub(base_size = 8.9) +
-  theme(legend.position = "none")
 
 fig5 <- (p5a / p5b) +
   plot_layout(heights = c(1, 1)) +
   plot_annotation(tag_levels = "A") &
   panel_tag_theme
 
-save_pub(fig5, "Figure5_temporary_context", width = 6.7, height = 4.8)
+save_pub(
+  fig5,
+  "Figure5_temporary_context",
+  width = 6.7,
+  height = 4.8
+)
+
+# Save panels separately for manual assembly.
+save_pub(
+  p5a,
+  "Figure5A_temporary_stress_overview",
+  width = 6.7,
+  height = 3.3
+)
+
+save_pub(
+  p5b,
+  "Figure5B_post_stress_zoom",
+  width = 3,
+  height = 3
+)
+
+write.csv(
+  tibble(
+    stress_start = context_start,
+    stress_end = context_end,
+    peak_extra_cost = STRESS_COST,
+    late_difference = late_residual
+  ),
+  file.path(OUT_DIR, "Figure5_stress_summary.csv"),
+  row.names = FALSE
+)
 
 
 # -----------------------------------------------------------------------------
@@ -1278,7 +1470,6 @@ save_pub(fig5, "Figure5_temporary_context", width = 6.7, height = 4.8)
 # -----------------------------------------------------------------------------
 
 T_reward <- default_pars$T
-
 duration <- round(0.13 * T_reward)
 
 early_start <- round(0.20 * T_reward)
@@ -1287,25 +1478,15 @@ late_start  <- round(0.60 * T_reward)
 early_end <- early_start + duration - 1
 late_end  <- late_start + duration - 1
 
-# ------------------------------------------------------------------
-# Smooth support pulse
-# ------------------------------------------------------------------
-# Keep the same total "dose" as the previous rectangular intervention:
-# boost = .12 for 'duration' episodes.
+# Smooth support pulse.
+# 'boost' is the PEAK increase in reward probability.
 boost <- 0.12
-total_dose <- boost * duration
 
-make_support_pulse <- function(T, start, duration, total_dose) {
-  
-  # Smooth rise and fall.
+make_support_pulse <- function(T, start, duration, peak) {
   shape <- sin(seq(0, pi, length.out = duration))
-  
-  # Normalize so the area/sum is identical across early and later support.
-  pulse <- total_dose * shape / sum(shape)
-  
+
   out <- rep(0, T)
-  out[start:(start + duration - 1)] <- pulse
-  
+  out[start:(start + duration - 1)] <- peak * shape
   out
 }
 
@@ -1313,19 +1494,15 @@ reward_early <- make_support_pulse(
   T = T_reward,
   start = early_start,
   duration = duration,
-  total_dose = total_dose
+  peak = boost
 )
 
 reward_late <- make_support_pulse(
   T = T_reward,
   start = late_start,
   duration = duration,
-  total_dose = total_dose
+  peak = boost
 )
-
-# ------------------------------------------------------------------
-# Simulations
-# ------------------------------------------------------------------
 
 df_reward_ref <- simulate_population(
   model = "value_cost",
@@ -1359,174 +1536,98 @@ df_reward_timing <- bind_rows(
 
 reward_summary <- df_reward_timing %>%
   group_by(condition, step) %>%
-  summarize(
-    mean_pi = mean(pi),
-    .groups = "drop"
-  )
-
-# ------------------------------------------------------------------
-# Spaghetti trajectories
-# ------------------------------------------------------------------
+  summarize(mean_pi = mean(pi), .groups = "drop")
 
 set.seed(910)
-
 support_ids <- sort(
-  sample(
-    unique(df_reward_timing$child_id),
-    30
-  )
+  sample(unique(df_reward_timing$child_id), 30)
 )
 
 support_spaghetti <- df_reward_timing %>%
   filter(child_id %in% support_ids)
 
-# ------------------------------------------------------------------
-# Panel A: full developmental trajectories
-# ------------------------------------------------------------------
-
+# Panel A: full trajectories.
+# Shading is drawn first so it remains behind the data.
 p6a <- ggplot() +
-  
-  # Individual trajectories
+  annotate(
+    "rect",
+    xmin = early_start, xmax = early_end,
+    ymin = -Inf, ymax = Inf,
+    fill = COL$orange, alpha = 0.025
+  ) +
+  annotate(
+    "rect",
+    xmin = late_start, xmax = late_end,
+    ymin = -Inf, ymax = Inf,
+    fill = COL$blue, alpha = 0.025
+  ) +
   geom_line(
     data = support_spaghetti,
     aes(
-      step,
-      pi,
+      step, pi,
       group = interaction(condition, child_id),
       color = condition
     ),
     linewidth = 0.14,
     alpha = 0.14
   ) +
-  
-  # Population means
   geom_line(
     data = reward_summary,
-    aes(
-      step,
-      mean_pi,
-      color = condition
-    ),
+    aes(step, mean_pi, color = condition),
     linewidth = 0.50
   ) +
-  # Very light support windows
-  annotate(
-    "rect",
-    xmin = early_start,
-    xmax = early_end,
-    ymin = -Inf,
-    ymax = Inf,
-    fill = COL$orange,
-    alpha = 0.025
-  ) +
-  
-  annotate(
-    "rect",
-    xmin = late_start,
-    xmax = late_end,
-    ymin = -Inf,
-    ymax = Inf,
-    fill = COL$blue,
-    alpha = 0.025
-  ) +
-  
-  # Thin bars at the top
   annotate(
     "segment",
-    x = early_start,
-    xend = early_end,
-    y = 0.92,
-    yend = 0.92,
-    linewidth = 0.9,
+    x = early_start, xend = early_end,
+    y = 0.92, yend = 0.92,
+    linewidth = 0.90,
     color = COL$orange
   ) +
-  
   annotate(
     "segment",
-    x = late_start,
-    xend = late_end,
-    y = 0.92,
-    yend = 0.92,
-    linewidth = 0.9,
+    x = late_start, xend = late_end,
+    y = 0.92, yend = 0.92,
+    linewidth = 0.90,
     color = COL$blue
   ) +
-  
-  # Small support markers at the top rather than full shaded regions
-  annotate(
-    "segment",
-    x = early_start,
-    xend = early_end,
-    y = 0.92,
-    yend = 0.92,
-    linewidth = 1.0,
-    color = COL$orange
-  ) +
-  
-  annotate(
-    "segment",
-    x = late_start,
-    xend = late_end,
-    y = 0.92,
-    yend = 0.92,
-    linewidth = 1.0,
-    color = COL$blue
-  ) +
-  
   annotate(
     "text",
     x = (early_start + early_end) / 2,
-    y = 0.95,
+    y = 0.955,
     label = "Early support",
-    size = 2.4,
-    color = COL$orange
+    size = 2.35,
+    color = COL$orange,
+    vjust = 0
   ) +
-  
   annotate(
     "text",
     x = (late_start + late_end) / 2,
-    y = 0.95,
+    y = 0.955,
     label = "Later support",
-    size = 2.4,
-    color = COL$blue
+    size = 2.35,
+    color = COL$blue,
+    vjust = 0
   ) +
-  
   scale_color_manual(
     values = c(
       "Reference" = COL$dark_gray,
       support_cols
     )
   ) +
-  
-  coord_cartesian(
-    ylim = c(0, 1)
-  ) +
-  
+  coord_cartesian(ylim = c(0, 1)) +
   labs(
-    x = NULL,
+    x = "Experience episode",
     y = "EF engagement propensity"
   ) +
-  
   theme_pub(base_size = 8.9) +
-  
   theme(
-    legend.position = "top"
+    legend.position = "bottom"
   )
 
-# ------------------------------------------------------------------
-# Panel B: effects aligned by end of support
-# ------------------------------------------------------------------
-
+# Child-level support effects relative to the paired reference condition.
 reward_effect <- df_reward_timing %>%
-  select(
-    child_id,
-    step,
-    condition,
-    pi
-  ) %>%
-  pivot_wider(
-    names_from = condition,
-    values_from = pi
-  ) %>%
+  select(child_id, step, condition, pi) %>%
+  pivot_wider(names_from = condition, values_from = pi) %>%
   transmute(
     child_id,
     step,
@@ -1534,10 +1635,7 @@ reward_effect <- df_reward_timing %>%
     `Later support` = `Later support` - Reference
   ) %>%
   pivot_longer(
-    cols = c(
-      `Early support`,
-      `Later support`
-    ),
+    cols = c(`Early support`, `Later support`),
     names_to = "condition",
     values_to = "delta_pi"
   ) %>%
@@ -1549,7 +1647,8 @@ reward_effect <- df_reward_timing %>%
     )
   )
 
-# Use only the follow-up period available for BOTH interventions.
+# Restrict both conditions to the follow-up horizon available for the later
+# support condition so the two curves have the same x-range.
 common_followup_max <- T_reward - late_end
 
 reward_effect_aligned <- reward_effect %>%
@@ -1559,26 +1658,18 @@ reward_effect_aligned <- reward_effect %>%
   )
 
 reward_effect_aligned_mean <- reward_effect_aligned %>%
-  group_by(
-    condition,
-    relative_episode
-  ) %>%
-  summarize(
-    mean_delta = mean(delta_pi),
-    .groups = "drop"
-  )
+  group_by(condition, relative_episode) %>%
+  summarize(mean_delta = mean(delta_pi), .groups = "drop")
 
 reward_effect_spaghetti <- reward_effect_aligned %>%
   filter(child_id %in% support_ids)
 
 p6b <- ggplot() +
-  
   geom_hline(
     yintercept = 0,
     linewidth = 0.25,
     color = COL$light_gray
   ) +
-  
   geom_line(
     data = reward_effect_spaghetti,
     aes(
@@ -1590,43 +1681,27 @@ p6b <- ggplot() +
     linewidth = 0.12,
     alpha = 0.10
   ) +
-  
   geom_line(
     data = reward_effect_aligned_mean,
-    aes(
-      relative_episode,
-      mean_delta,
-      color = condition
-    ),
+    aes(relative_episode, mean_delta, color = condition),
     linewidth = 0.50
   ) +
-  
-  scale_color_manual(
-    values = support_cols
-  ) +
-  
+  scale_color_manual(values = support_cols) +
   labs(
-    x = "Experience episodes since support ended",
+    x = NULL,
     y = "Change from reference"
   ) +
-  
   theme_pub(base_size = 8.9) +
-  
   theme(
-    legend.position = "none"
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank()
   )
 
-# ------------------------------------------------------------------
-# Assemble figure
-# ------------------------------------------------------------------
-
 fig6 <- (p6a / p6b) +
-  plot_layout(
-    heights = c(1.15, 1)
-  ) +
-  plot_annotation(
-    tag_levels = "A"
-  ) &
+  plot_layout(heights = c(1.15, 1)) +
+  plot_annotation(tag_levels = "A") &
   panel_tag_theme
 
 save_pub(
@@ -1636,91 +1711,71 @@ save_pub(
   height = 5.0
 )
 
-# ------------------------------------------------------------------
-# Timing comparison used in text/caption
-# ------------------------------------------------------------------
-
-final_start <- episode_at_fraction(
-  T_reward,
-  0.85
+# Save panels separately for manual assembly.
+save_pub(
+  p6a,
+  "Figure6A_support_timing_overview",
+  width = 6.7,
+  height = 3.3
 )
+
+save_pub(
+  p6b,
+  "Figure6B_support_effect_zoom",
+  width = 6.7,
+  height = 2.6
+)
+
+# Timing comparison used in the text/caption.
+final_start <- episode_at_fraction(T_reward, 0.85)
 
 final_effects <- df_reward_timing %>%
   filter(step >= final_start) %>%
   group_by(condition) %>%
-  summarize(
-    mean_pi = mean(pi),
-    .groups = "drop"
-  ) %>%
-  pivot_wider(
-    names_from = condition,
-    values_from = mean_pi
-  ) %>%
+  summarize(mean_pi = mean(pi), .groups = "drop") %>%
+  pivot_wider(names_from = condition, values_from = mean_pi) %>%
   transmute(
     comparison = "Common final time",
     early_effect = `Early support` - Reference,
     later_effect = `Later support` - Reference
   )
 
-followup_lag <- round(
-  0.15 * T_reward
-)
-
-window_halfwidth <- round(
-  0.025 * T_reward
-)
+followup_lag <- round(0.15 * T_reward)
+window_halfwidth <- round(0.025 * T_reward)
 
 early_eval_center <- early_end + followup_lag
 late_eval_center  <- late_end + followup_lag
 
-window_mean <- function(
-    df,
-    condition_name,
-    center,
-    halfwidth
-) {
-  
+window_mean <- function(df, condition_name, center, halfwidth) {
   df %>%
     filter(
       condition == condition_name,
       step >= center - halfwidth,
       step <= center + halfwidth
     ) %>%
-    summarize(
-      value = mean(pi)
-    ) %>%
+    summarize(value = mean(pi)) %>%
     pull(value)
 }
 
 equal_lag_effects <- tibble(
   comparison = "Same follow-up lag",
-  
   early_effect =
     window_mean(
-      df_reward_timing,
-      "Early support",
-      early_eval_center,
-      window_halfwidth
+      df_reward_timing, "Early support",
+      early_eval_center, window_halfwidth
     ) -
     window_mean(
-      df_reward_timing,
-      "Reference",
-      early_eval_center,
-      window_halfwidth
+      df_reward_timing, "Reference",
+      early_eval_center, window_halfwidth
     ),
-  
   later_effect =
     window_mean(
-      df_reward_timing,
-      "Later support",
-      late_eval_center,
-      window_halfwidth
+      df_reward_timing, "Later support",
+      late_eval_center, window_halfwidth
     ) -
     window_mean(
-      df_reward_timing,
-      "Reference",
-      late_eval_center,
-      window_halfwidth
+      df_reward_timing, "Reference",
+      late_eval_center, window_halfwidth
     )
 )
 
@@ -1731,13 +1786,163 @@ reward_timing_effects <- bind_rows(
 
 write.csv(
   reward_timing_effects,
-  file.path(
-    OUT_DIR,
-    "Figure6_support_timing_effects.csv"
-  ),
+  file.path(OUT_DIR, "Figure6_support_timing_effects.csv"),
   row.names = FALSE
 )
 
+
+# -----------------------------------------------------------------------------
+# 8.5. REPLICATED PARAMETER SWEEP USED IN FIGURE 7
+# -----------------------------------------------------------------------------
+
+log_runif <- function(n, min, max) {
+  exp(runif(n, log(min), log(max)))
+}
+
+parallel_lapply <- function(X, FUN, workers = 1L) {
+  if (.Platform$OS.type == "windows" || workers <= 1L) {
+    lapply(X, FUN)
+  } else {
+    parallel::mclapply(X, FUN, mc.cores = workers)
+  }
+}
+
+SWEEP_CACHE <- file.path(DATA_DIR, "parameter_sweep_consistent_windows.csv")
+
+if (file.exists(SWEEP_CACHE)) {
+
+  sweep_results <- read.csv(SWEEP_CACHE)
+
+} else {
+
+  if (!RECOMPUTE_SWEEP_IF_MISSING) {
+    stop(
+      "Parameter-sweep cache not found: ", SWEEP_CACHE,
+      "\nSet RECOMPUTE_SWEEP_IF_MISSING <- TRUE to recreate it."
+    )
+  }
+
+  set.seed(260819)
+
+  n_parameter_sets <- 250
+  n_mc_reps <- 5
+  sweep_N <- 150
+  sweep_T <- 900
+
+  sweep_pars <- tibble(
+    set_id = seq_len(n_parameter_sets),
+    alpha_V = log_runif(n_parameter_sets, 0.006, 0.070),
+    alpha_C = log_runif(n_parameter_sets, 0.0004, 0.0070),
+    tau = runif(n_parameter_sets, 0.10, 0.30),
+    p_reward = runif(n_parameter_sets, 0.45, 0.72),
+
+    # Initial net value D0 = V0 - C0 and available practice-related
+    # cost reduction are varied independently.
+    initial_delta = runif(n_parameter_sets, -0.60, -0.20),
+    practice_range = runif(n_parameter_sets, 0.25, 0.75),
+
+    V0 = default_pars$V0
+  ) %>%
+    mutate(
+      C0 = V0 - initial_delta,
+      C_min = C0 - practice_range
+    )
+
+  detected_cores <- parallel::detectCores(logical = FALSE)
+  if (is.na(detected_cores)) detected_cores <- 1L
+
+  n_workers <- max(
+    1L,
+    min(n_parameter_sets, detected_cores - 1L)
+  )
+
+  message(
+    "Parameter sweep: ",
+    n_parameter_sets, " parameter sets x ",
+    n_mc_reps, " replications; ",
+    n_workers, " workers."
+  )
+
+  sweep_list <- parallel_lapply(
+    seq_len(n_parameter_sets),
+
+    function(j) {
+      pars_j <- sweep_pars[j, ]
+
+      bind_rows(
+        lapply(seq_len(n_mc_reps), function(mc) {
+
+          metrics_j <- simulate_development_metrics_fast(
+            N = sweep_N,
+            T = sweep_T,
+            V0 = pars_j$V0,
+            C0 = pars_j$C0,
+            C_min = pars_j$C_min,
+            tau = pars_j$tau,
+            p_reward = pars_j$p_reward,
+            alpha_V = pars_j$alpha_V,
+            alpha_C = pars_j$alpha_C,
+            record_every = 10,
+            seed = 100000 + j * 100 + mc
+          )
+
+          bind_cols(
+            pars_j,
+            tibble(mc_rep = mc),
+            metrics_j
+          )
+        })
+      )
+    },
+
+    workers = n_workers
+  )
+
+  sweep_rep_results <- bind_rows(sweep_list)
+
+  sweep_results <- sweep_rep_results %>%
+    group_by(
+      set_id,
+      alpha_V,
+      alpha_C,
+      tau,
+      p_reward,
+      initial_delta,
+      practice_range,
+      V0,
+      C0,
+      C_min
+    ) %>%
+    summarize(
+      delta_mean = mean(delta_mean, na.rm = TRUE),
+      sd_gain = mean(sd_gain, na.rm = TRUE),
+      rho_middle_late = mean(rho_middle_late, na.rm = TRUE),
+      delta_mean_mc_sd = sd(delta_mean, na.rm = TRUE),
+      sd_gain_mc_sd = sd(sd_gain, na.rm = TRUE),
+      rho_middle_late_mc_sd = sd(rho_middle_late, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  write.csv(
+    sweep_results,
+    SWEEP_CACHE,
+    row.names = FALSE
+  )
+}
+
+# Summary used in the Results/caption.
+robustness_summary <- tibble(
+  proportion_mean_increase = mean(sweep_results$delta_mean > 0, na.rm = TRUE),
+  proportion_sd_increase = mean(sweep_results$sd_gain > 0, na.rm = TRUE),
+  proportion_both = mean(
+    sweep_results$delta_mean > 0 & sweep_results$sd_gain > 0,
+    na.rm = TRUE
+  ),
+  median_middle_late_rho = median(
+    sweep_results$rho_middle_late,
+    na.rm = TRUE
+  )
+)
 
 # -----------------------------------------------------------------------------
 # 9. FIGURE 7: Parameter robustness
@@ -1948,7 +2153,12 @@ write.csv(
 # 10. Console checks
 # -----------------------------------------------------------------------------
 
-cat("\nPublication figures written to:\n  ", normalizePath(OUT_DIR), "\n\n", sep = "")
+cat(
+  "\nPublication figures written to:\n  ",
+  normalizePath(OUT_DIR),
+  "\n\n",
+  sep = ""
+)
 
 cat("Figure 2 model metrics (consistent windows):\n")
 print(model_metrics)
@@ -1956,10 +2166,13 @@ print(model_metrics)
 cat("\nFigure 3 rank stability:\n")
 print(stability_identical)
 
+cat("\nFigure 3 replicated long-run rank memory:\n")
+print(rank_memory_summary)
+
 cat("\nFigure 4 environmental sensitivity:\n")
 print(reward_sd_sensitivity)
 
-cat("\nFigure 5 late contextual difference:\n")
+cat("\nFigure 5 late stress difference:\n")
 print(late_residual)
 
 cat("\nFigure 6 support timing effects:\n")
@@ -1968,6 +2181,5 @@ print(reward_timing_effects)
 cat("\nFigure 7 robustness summary:\n")
 print(robustness_summary)
 
-cat("\nMonte Carlo summary:\n")
-print(mc_summary)
-
+cat("\nFigure 7 quadrant summary:\n")
+print(pattern_summary)
