@@ -945,7 +945,12 @@ save_pub(
 # 6. FIGURE 4: Persistent environmental differences
 # -----------------------------------------------------------------------------
 
-reward_sd_grid <- seq(0, 0.06, by = 0.003)
+reward_sd_grid <- sort(unique(c(
+  seq(0, 0.06, by = 0.003),
+  0.01,
+  0.02,
+  0.04
+)))
 n_reward_sd_reps <- 5
 
 # Replicate each environmental-heterogeneity setting so the sensitivity curve
@@ -977,9 +982,9 @@ reward_sd_sensitivity <- reward_sd_sensitivity_reps %>%
   group_by(imposed_sd_p) %>%
   summarize(
     late_sd_pi = median(late_sd_pi, na.rm = TRUE),
-    rho_middle_late = median(rho_middle_late, na.rm = TRUE),
     rho_q25 = quantile(rho_middle_late, 0.25, na.rm = TRUE),
     rho_q75 = quantile(rho_middle_late, 0.75, na.rm = TRUE),
+    rho_middle_late = median(rho_middle_late, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -1134,10 +1139,30 @@ p4b <- ggplot() +
     legend.position = "bottom"
   )
 
+
+p4a <- p4a +
+  theme(
+    plot.margin = margin(6, 6, 5, 12)
+  )
+
+p4b <- p4b +
+  theme(
+    plot.margin = margin(6, 6, 5, 12)
+  )
+
+fig4_tag_theme <- theme(
+  plot.tag = element_text(
+    face = "bold",
+    size = 9.5
+  ),
+  plot.tag.position = c(-0.02, 1.02)
+)
+
 fig4 <- (p4a / p4b) +
   plot_layout(heights = c(0.75, 1.25)) +
   plot_annotation(tag_levels = "A") &
-  panel_tag_theme
+  fig4_tag_theme
+
 
 save_pub(fig4, "Figure4_persistent_environment", width = 6.8, height = 5.4)
 
