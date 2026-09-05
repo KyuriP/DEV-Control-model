@@ -27,10 +27,8 @@
 #   middle = 50-60%
 #   late   = 85-95%
 #
-# The default stress/context perturbation follows the current simulation code:
-#   X = .20 from 55.0% to 58.5% of the developmental horizon.
-# If the manuscript currently says 60-63.5%, update the manuscript or change
-# STRESS_START_FRAC / STRESS_END_FRAC below before final submission.
+# The temporary contextual perturbation is a smooth pulse spanning
+# 55.0%-58.5% of the experience horizon, with peak extra cost X = .20.
 
 # -----------------------------------------------------------------------------
 # 0. Packages and user settings
@@ -713,7 +711,7 @@ p3a <- ggplot() +
     linewidth = 0.50
   ) +
   coord_cartesian(ylim = c(0, 1)) +
-  labs(x = "Experience episode", y = "Engagement propensity") +
+  labs(x = "Experience episode", y = "EF engagement propensity") +
   theme_pub(base_size = 8.8) +
   theme(legend.position = "none")
 
@@ -728,7 +726,7 @@ snapshots <- bind_rows(
 p3b <- ggplot(snapshots, aes(pi, color = snapshot)) +
   geom_density(linewidth = LW_GROUP, adjust = 1.1) +
   scale_color_manual(values = snapshot_cols) +
-  labs(x = "Engagement propensity", y = "Density") +
+  labs(x = "EF engagement propensity", y = "Density") +
   theme_pub(base_size = 8.8) +
   theme(legend.position = "bottom")
 
@@ -776,9 +774,9 @@ T_long <- 4 * (default_pars$T - 1) + 1
 n_rank_reps <- 20
 rank_rep_N  <- 1000
 
-# Start at 1.0x so the plotted curve is strictly subsequent to the reference
-# window used to define the earlier ranking.
-memory_centers <- seq(1.00, 4.00, by = 0.20)
+# Start at 1.10x so the comparison windows do not overlap the late reference
+# window (85%-95% of the original developmental horizon).
+memory_centers <- seq(1.10, 4.00, by = 0.20)
 memory_half_width <- 0.06
 
 rank_memory_reps <- bind_rows(
@@ -795,11 +793,14 @@ rank_memory_reps <- bind_rows(
 
     reference_rank_scores <- df_long_rep %>%
       filter(
-        step >= round(0.80 * (default_pars$T - 1)) + 1,
-        step <= round(0.95 * (default_pars$T - 1)) + 1
+        step >= episode_at_fraction(default_pars$T, 0.85),
+        step <= episode_at_fraction(default_pars$T, 0.95)
       ) %>%
       group_by(child_id) %>%
-      summarize(reference_score = mean(pi), .groups = "drop")
+      summarize(
+        reference_score = mean(pi),
+        .groups = "drop"
+      )
 
     bind_rows(
       lapply(memory_centers, function(center_i) {
@@ -956,6 +957,8 @@ reward_sd_sensitivity_reps <- map_dfr(reward_sd_grid, function(sd_p) {
       model = "value_cost",
       N = 1000,
       p_reward_sd = sd_p,
+      # Same replication seeds across reward-SD values reduce Monte Carlo noise
+      # in the sensitivity comparison.
       seed = 6000 + rep_i
     )
 
@@ -1144,6 +1147,12 @@ write.csv(
   row.names = FALSE
 )
 
+write.csv(
+  reward_sd_sensitivity_reps,
+  file.path(OUT_DIR, "Figure4_environment_sensitivity_replications.csv"),
+  row.names = FALSE
+)
+
 
 # -----------------------------------------------------------------------------
 # 7. FIGURE 5: Temporary contextual perturbation
@@ -1208,27 +1217,6 @@ late_residual <- df_context_all %>%
   pivot_wider(names_from = condition, values_from = mean_pi) %>%
   transmute(delta = `Temporary stress` - Reference) %>%
   pull(delta)
-
-# Panel B is a literal magnification of the boxed region in Panel A.
-zoom_start <- max(1, context_start - round(0.05 * T_context))
-zoom_end   <- min(T_context, context_end + round(0.18 * T_context))
-
-zoom_spaghetti <- context_spaghetti %>%
-  filter(step >= zoom_start, step <= zoom_end)
-
-zoom_summary <- context_summary %>%
-  filter(step >= zoom_start, step <= zoom_end)
-
-zoom_y_range <- range(
-  c(zoom_spaghetti$pi, zoom_summary$mean_pi),
-  na.rm = TRUE
-)
-
-zoom_y_pad <- max(diff(zoom_y_range) * 0.05, 0.01)
-zoom_y_lim <- c(
-  max(0, zoom_y_range[1] - zoom_y_pad),
-  min(1, zoom_y_range[2] + zoom_y_pad)
-)
 
 # Panel A: full developmental trajectories with the stress interval marked.
 stress_fill <- "#E76F51"
@@ -1338,26 +1326,6 @@ context_post_spaghetti <- context_spaghetti %>%
     step <= context_post_end
   )
 
-# Use fewer sampled children in the zoomed panel so the mean lines stay visible.
-set.seed(812)
-
-context_post_ids <- sort(
-  sample(context_ids, 30)
-)
-
-context_post_summary <- context_summary %>%
-  filter(
-    step >= context_post_start,
-    step <= context_post_end
-  )
-
-context_post_spaghetti <- context_spaghetti %>%
-  filter(
-    child_id %in% context_post_ids,
-    step >= context_post_start,
-    step <= context_post_end
-  )
-
 # Tight y-range based on the population means, with a modest amount of padding.
 post_range <- range(
   context_post_summary$mean_pi,
@@ -1417,26 +1385,12 @@ p5b <- ggplot() +
   
   theme(
     legend.position = "none",
-    axis.title.x = element_blank(),
-    axis.text.x  = element_blank(),
-    axis.ticks.x = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text.y  = element_blank(),
-    axis.ticks.y = element_blank()
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
   )
 
-
-fig5 <- (p5a / p5b) +
-  plot_layout(heights = c(1, 1)) +
-  plot_annotation(tag_levels = "A") &
-  panel_tag_theme
-
-save_pub(
-  fig5,
-  "Figure5_temporary_context",
-  width = 6.7,
-  height = 4.8
-)
 
 # Save panels separately for manual assembly.
 save_pub(
@@ -1696,20 +1650,9 @@ p6b <- ggplot() +
     legend.position = "none",
     axis.title.x = element_blank(),
     axis.text.x  = element_blank(),
-    axis.ticks.x = element_blank()
+    axis.ticks.x = element_blank(),
+    axis.line.x = element_blank()
   )
-
-fig6 <- (p6a / p6b) +
-  plot_layout(heights = c(1.15, 1)) +
-  plot_annotation(tag_levels = "A") &
-  panel_tag_theme
-
-save_pub(
-  fig6,
-  "Figure6_support_timing",
-  width = 6.7,
-  height = 5.0
-)
 
 # Save panels separately for manual assembly.
 save_pub(
@@ -1721,7 +1664,7 @@ save_pub(
 
 save_pub(
   p6b,
-  "Figure6B_support_effect_zoom",
+  "Figure6B_support_effect_aligned",
   width = 6.7,
   height = 2.6
 )
@@ -1807,7 +1750,9 @@ parallel_lapply <- function(X, FUN, workers = 1L) {
   }
 }
 
-SWEEP_CACHE <- file.path(DATA_DIR, "parameter_sweep_consistent_windows.csv")
+# Version the cache so changes to the sweep implementation cannot silently reuse
+# results generated by an older analysis.
+SWEEP_CACHE <- file.path(DATA_DIR, "parameter_sweep_consistent_windows_v2.csv")
 
 if (file.exists(SWEEP_CACHE)) {
 
