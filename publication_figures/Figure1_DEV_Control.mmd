@@ -1,0 +1,40 @@
+flowchart LR
+%% Figure 1 — arranged per Yuko's sketch (Nov 2026): context far left; effort cost above, learned payoff below;
+%% net value -> EF engagement -> experienced outcome along the middle; reward environment above the outcome;
+%% practice loop back to C (top), learning loop back to V (bottom).
+
+classDef fast fill:#E8F4FF,stroke:#1E6FB9,stroke-width:1.4px,color:#0B2A3D;
+classDef slow fill:#FFF2CC,stroke:#B07D00,stroke-width:1.4px,color:#3D2B00;
+classDef outcome fill:#F3E8FF,stroke:#6B21A8,stroke-width:1.4px,color:#2E1065;
+classDef decision fill:#E6FFFA,stroke:#0F766E,stroke-width:1.4px,color:#042F2E;
+classDef context fill:#F7F7F7,stroke:#6B7280,stroke-width:1.4px,color:#111827,stroke-dasharray: 4 3;
+
+linkStyle default stroke:#7F8C94,stroke-width:1.1px;
+
+C(["<b>C(t): effective effort cost</b><br/>How hard does<br/>engaging EF feel?"]):::slow
+X[["Temporary context / stress<br/>(internal & external)"]]:::context
+V(["<b>V(t): learned<br/>expected payoff</b><br/>How much does EF<br/>usually pay off?"]):::slow
+
+U{{"Net value of<br/>engaging EF"}}:::decision
+ENV[["Reward environment<br/>How often does<br/>EF pay off?"]]:::context
+A(["<b>EF engagement</b><br/>A(t): engage or not"]):::fast
+
+R(["Experienced<br/>outcome"]):::outcome
+
+%% invisible links: keep context in the leftmost column
+X ~~~ C
+X ~~~ V
+
+C -->|lowers| U
+V -->|raises| U
+X -->|temporarily lowers| U
+U --> A
+A -->|creates experience| R
+ENV -->|shapes payoff| R
+
+%% Feedback loops back to the left. Written as two-headed links so the layout keeps
+%% C and V on the left; the extra arrowhead is hidden by the linkStyle below.
+C <-->|practice makes future<br/>engagement easier| A
+V <-->|learn whether EF pays off| R
+linkStyle 8,9 marker-end:none;
+linkStyle 0,1 stroke-width:0px,stroke:none;
