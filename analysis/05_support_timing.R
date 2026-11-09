@@ -109,7 +109,7 @@ p_a <- ggplot() +
   scale_color_manual(values = sup_cols, breaks = names(sup_cols)) +
   step_axis +
   coord_cartesian(ylim = c(0, 1)) +
-  labs(x = "Simulation step", y = "EF engagement propensity") +
+  labs(x = time_label, y = "EF engagement propensity") +
   theme_pub(8.9)
 
 # B: effect over time since the pulse ended, all replications.
@@ -135,7 +135,8 @@ p_b <- ggplot(aligned, aes(since_end, median, color = condition, fill = conditio
   geom_line(linewidth = 0.45) +
   scale_color_manual(values = sup_cols) +
   scale_fill_manual(values = sup_cols) +
-  labs(x = "Steps since support ended", y = "Support minus reference") +
+  scale_x_continuous(breaks = seq(0, 375, 75), labels = pct_label(seq(0, 375, 75))) +
+  labs(x = "Time since support ended (% of simulation)", y = "Support minus reference") +
   theme_pub(8.9) +
   theme(legend.position = "none")
 
@@ -151,7 +152,8 @@ p_c <- ggplot(onset, aes(start, effect_median)) +
              size = 1.8) +
   scale_color_manual(values = sup_cols) +
   coord_cartesian(ylim = c(0, NA)) +
-  labs(x = "Support onset (simulation step)", y = "Effect 225 steps\nafter support ended") +
+  scale_x_continuous(breaks = seq(150, 900, 150), labels = pct_label(seq(150, 900, 150))) +
+  labs(x = "Support onset (% of simulation)", y = "Effect at follow-up") +
   theme_pub(8.9) +
   theme(legend.position = "none")
 
@@ -161,9 +163,9 @@ save_fig(fig6, "Figure6_support_timing", width = 7.1, height = 6)
 
 # Figure S4: size, duration, and follow-up lag ------------------------------
 size_dur <- filter(sim5_summary, start %in% round(c(0.20, 0.50) * T), lag == main_lag) %>%
-  mutate(onset = paste("Onset at step", start),
-         duration = factor(paste(duration, "steps"),
-                           levels = paste(sort(unique(duration)), "steps")))
+  mutate(onset = paste0("Onset at ", pct_label(start)),
+         duration = factor(duration, levels = sort(unique(duration)),
+                           labels = c("Half as long", "Main duration", "Twice as long")))
 
 p_s4a <- ggplot(size_dur, aes(boost, effect_median, color = duration)) +
   geom_hline(yintercept = 0, linewidth = 0.25, color = COL$gray) +
@@ -173,7 +175,7 @@ p_s4a <- ggplot(size_dur, aes(boost, effect_median, color = duration)) +
   facet_wrap(~ onset) +
   scale_x_continuous(breaks = c(0.06, 0.12, 0.24)) +
   scale_color_manual(values = c(COL$blue, COL$orange, COL$purple)) +
-  labs(x = "Peak increase in reward probability", y = "Effect 225 steps\nafter support ended") +
+  labs(x = "Peak increase in reward probability", y = "Effect at follow-up") +
   theme_pub(8.8) +
   theme(panel.spacing = grid::unit(1.5, "lines"))
 
@@ -187,7 +189,8 @@ p_s4b <- ggplot(lag_df, aes(lag, effect_median, color = condition)) +
                   position = position_dodge(width = 12), size = 0.2) +
   geom_line(position = position_dodge(width = 12), linewidth = 0.35) +
   scale_color_manual(values = sup_cols) +
-  labs(x = "Follow-up lag (steps after support ended)", y = "Support minus reference") +
+  scale_x_continuous(breaks = sort(unique(lag_df$lag)), labels = c("Shorter", "Matched", "Longer")) +
+  labs(x = "Follow-up", y = "Support minus reference") +
   theme_pub(8.8)
 
 fig_s4 <- (p_s4a / p_s4b) + plot_annotation(tag_levels = "A") & panel_tags

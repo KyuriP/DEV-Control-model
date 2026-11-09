@@ -68,7 +68,8 @@ p_b <- ggplot() +
   geom_vline(xintercept = default_pars$T, linetype = "dashed", linewidth = 0.28, color = COL$gray) +
   scale_color_manual(values = env_cols, breaks = group_labels) +
   coord_cartesian(ylim = c(0, 1)) +
-  labs(x = "Simulation step", y = "EF engagement propensity") +
+  long_axis +
+  labs(x = long_label, y = "EF engagement propensity") +
   theme_pub(8.8) +
   theme(plot.margin = margin(6, 6, 5, 12))
 

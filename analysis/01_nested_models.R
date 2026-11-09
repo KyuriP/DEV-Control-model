@@ -55,7 +55,7 @@ fig2 <- ggplot() +
   scale_color_manual(values = model_cols, breaks = names(model_cols)) +
   step_axis +
   scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.025))) +
-  labs(x = "Simulation step", y = "EF engagement propensity") +
+  labs(x = time_label, y = "EF engagement propensity") +
   theme_pub()
 
 save_fig(fig2, "Figure2_nested_models", width = 6.8, height = 3.6)

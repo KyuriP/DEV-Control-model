@@ -99,7 +99,7 @@ p_a <- ggplot() +
   scale_color_manual(values = cond_cols) +
   step_axis +
   coord_cartesian(ylim = c(0, 1)) +
-  labs(x = "Simulation step", y = "EF engagement propensity") +
+  labs(x = time_label, y = "EF engagement propensity") +
   theme_pub(8.9)
 
 # Inset: zoom on the period after the stress, same replication and agents.
@@ -113,7 +113,7 @@ p_inset <- ggplot() +
             linewidth = 0.15, alpha = 0.35) +
   geom_line(data = zoom_means, aes(step, mean_pi, color = condition), linewidth = 0.55) +
   scale_color_manual(values = cond_cols) +
-  scale_x_continuous(breaks = seq(zoom[1], zoom[2], 100)) +
+  scale_x_continuous(breaks = c(1050, 1200), labels = c("70%", "80%")) +
   coord_cartesian(xlim = zoom, ylim = zoom_y, expand = FALSE) +
   labs(x = NULL, y = NULL) +
   theme_pub(7) +
@@ -131,8 +131,8 @@ save_fig(fig5, "Figure5_temporary_stress", width = 6.7, height = 3.9)
 
 # Figure S3: robustness -----------------------------------------------------
 dose <- filter(sim4_summary, start == main_start) %>%
-  mutate(duration = factor(paste(duration, "steps"),
-                           levels = paste(sort(unique(duration)), "steps")))
+  mutate(duration = factor(duration, levels = sort(unique(duration)),
+                           labels = c("Half as long", "Main duration", "Twice as long")))
 
 p_s3a <- ggplot(dose, aes(peak, lag_effect_median, color = duration)) +
   geom_hline(yintercept = 0, linewidth = 0.25, color = COL$gray) +
@@ -140,7 +140,7 @@ p_s3a <- ggplot(dose, aes(peak, lag_effect_median, color = duration)) +
                   position = position_dodge(width = 0.02), size = 0.2) +
   geom_line(position = position_dodge(width = 0.02), linewidth = 0.35) +
   scale_color_manual(values = c(COL$blue, COL$orange, COL$purple)) +
-  labs(x = "Peak contextual cost", y = "Remaining difference\n225 steps after stress") +
+  labs(x = "Peak contextual cost", y = "Remaining difference\nat follow-up") +
   theme_pub(8.8)
 
 onset <- filter(sim4_summary, duration == main_duration, peak == main_peak)
@@ -150,7 +150,8 @@ p_s3b <- ggplot(onset, aes(start, lag_effect_median)) +
   geom_pointrange(aes(ymin = lag_effect_q25, ymax = lag_effect_q75),
                   color = COL$orange, size = 0.2) +
   geom_line(color = COL$orange, linewidth = 0.35) +
-  labs(x = "Stress onset (simulation step)", y = "Remaining difference\n225 steps after stress") +
+  scale_x_continuous(breaks = sort(unique(onset$start)), labels = pct_label(sort(unique(onset$start)))) +
+  labs(x = "Stress onset (% of simulation)", y = "Remaining difference\nat follow-up") +
   theme_pub(8.8)
 
 fig_s3 <- (p_s3a | p_s3b) + plot_annotation(tag_levels = "A") & panel_tags

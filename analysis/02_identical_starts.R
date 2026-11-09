@@ -78,7 +78,7 @@ p_a <- ggplot() +
             aes(step, mean_pi), color = "dodgerblue4", linewidth = 0.5) +
   step_axis +
   coord_cartesian(ylim = c(0, 1)) +
-  labs(x = "Simulation step", y = "EF engagement propensity") +
+  labs(x = time_label, y = "EF engagement propensity") +
   theme_pub(8.8)
 
 snapshot <- function(frac, label) {
@@ -114,7 +114,8 @@ p_d <- ggplot(rank_memory_summary, aes(step, median_rho)) +
   geom_line(linewidth = 0.5, color = COL$orange) +
   geom_point(size = 0.9, color = COL$orange) +
   coord_cartesian(ylim = c(-0.1, 1)) +
-  labs(x = "Simulation step", y = "Correlation with rank at step 1,500") +
+  long_axis +
+  labs(x = long_label, y = "Correlation with rank at\nend of original simulation") +
   theme_pub(8.8)
 
 fig3 <- ((p_a | p_b) / (p_c | p_d)) + plot_annotation(tag_levels = "A") & panel_tags
@@ -126,7 +127,8 @@ fig_s2 <- ggplot(data.frame(step = long1$steps, sd_pi = apply(long1$pi, 2, sd)),
                  aes(step, sd_pi)) +
   geom_line(linewidth = 0.3, color = COL$ink) +
   geom_vline(xintercept = T_main, linetype = "dashed", linewidth = 0.3, color = COL$gray) +
-  labs(x = "Simulation step", y = "Between-agent SD") +
+  long_axis +
+  labs(x = long_label, y = "Between-agent SD") +
   theme_pub()
 
 save_fig(fig_s2, "FigureS2_long_run_sd", width = 6.1, height = 3.4)

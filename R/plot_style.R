@@ -68,5 +68,16 @@ trajectories_df <- function(sim, ids) {
   )
 }
 
-step_axis <- scale_x_continuous(breaks = c(1, 500, 1000, 1500),
-                                labels = c("0", "500", "1000", "1500"))
+# Time axes. A step has no fixed meaning in real time, so time is shown as a
+# percentage of the default 1,500-step simulation.
+time_label <- "Time (% of simulation)"
+step_axis <- scale_x_continuous(breaks = 1 + c(0, 0.25, 0.5, 0.75, 1) * 1499,
+                                labels = c("0%", "25%", "50%", "75%", "100%"))
+
+# Long runs: time in multiples of the original simulation length.
+long_label <- "Time (multiples of the original simulation length)"
+long_axis <- scale_x_continuous(breaks = c(0, 1500, 3000, 4500, 6000),
+                                labels = c("0", "1", "2", "3", "4"))
+
+# Label a step count (e.g., a lag or an onset) as a percentage of the simulation.
+pct_label <- function(steps, T = 1500) paste0(round(100 * steps / T), "%")
