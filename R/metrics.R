@@ -1,7 +1,7 @@
 # Summary measures
 
 # Developmental periods, as fractions of the simulation.
-# For T = 1500: early 300-450, middle 750-900, late 1275-1425.
+# For T = 1500, approximately: early 300-450, middle 750-900, late 1275-1425.
 default_windows <- list(
   early  = c(0.20, 0.30),
   middle = c(0.50, 0.60),

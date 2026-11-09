@@ -81,11 +81,13 @@ p_a <- ggplot() +
   labs(x = time_label, y = "EF engagement propensity") +
   theme_pub(8.8)
 
-snapshot <- function(frac, label) {
-  col <- which.min(abs(run1$steps - step_at(T_main, frac)))
-  data.frame(pi = run1$pi[, col], period = label)
-}
-snapshots <- bind_rows(snapshot(0.25, "Early"), snapshot(0.55, "Middle"), snapshot(0.90, "Late")) %>%
+# Each agent's average engagement within each developmental period, the same
+# scores used for the reported statistics.
+snapshots <- bind_rows(
+  data.frame(pi = window_score(run1, default_windows$early), period = "Early"),
+  data.frame(pi = window_score(run1, default_windows$middle), period = "Middle"),
+  data.frame(pi = window_score(run1, default_windows$late), period = "Late")
+) %>%
   mutate(period = factor(period, levels = c("Early", "Middle", "Late")))
 
 p_b <- ggplot(snapshots, aes(pi, color = period)) +
@@ -115,7 +117,7 @@ p_d <- ggplot(rank_memory_summary, aes(step, median_rho)) +
   geom_point(size = 0.9, color = COL$orange) +
   coord_cartesian(ylim = c(-0.1, 1)) +
   long_axis +
-  labs(x = long_label, y = "Correlation with rank at\nend of original simulation") +
+  labs(x = long_label, y = "Correlation with\nlate-period rank") +
   theme_pub(8.8)
 
 fig3 <- ((p_a | p_b) / (p_c | p_d)) + plot_annotation(tag_levels = "A") & panel_tags

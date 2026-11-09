@@ -1,4 +1,5 @@
-# Simulation 5: does the same supportive experience matter more when it comes earlier?
+# Simulation 5: does the same temporary reward boost have a larger effect
+# when it occurs earlier?
 # Support = temporary increase in the probability that engagement pays off,
 # compared with a reference run with the same seed.
 # Main conditions: half-sine pulse lasting 195 steps (13% of the run), peak +.12,

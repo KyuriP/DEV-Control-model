@@ -17,8 +17,9 @@ default_pars <- list(
   C_min = 0.459       # lower bound on effort cost
 )
 
-# Every main simulation uses the same 20 seeds, so conditions are paired
-# (e.g., stress vs. reference differ only in the stress pulse).
+# Simulations 1-5 use the same 20 seeds, so directly compared conditions are
+# paired (e.g., stress vs. reference differ only in the stress pulse).
+# Simulation 6 defines its own seeds.
 seeds <- 1001:1020
 
 model_labels <- c(

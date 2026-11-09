@@ -43,15 +43,16 @@ run_set <- function(j) {
   }))
 }
 
-n_cores <- max(1, parallel::detectCores() - 1)
-if (.Platform$OS.type == "windows") n_cores <- 1
+n_detected <- parallel::detectCores()
+if (is.na(n_detected)) n_detected <- 2
+n_cores <- if (.Platform$OS.type == "windows") 1 else max(1, min(n_sets, n_detected - 1))
 sweep_reps <- bind_rows(parallel::mclapply(seq_len(n_sets), run_set, mc.cores = n_cores))
 
 # Average over replications; keep the replication SD for the supplement.
 sweep <- sweep_reps %>%
   group_by(set_id) %>%
   summarize(across(c(delta_mean, sd_gain, rho_middle_late),
-                   list(mean = mean, rep_sd = sd)),
+                   list(mean = ~ mean(.x, na.rm = TRUE), rep_sd = ~ sd(.x, na.rm = TRUE))),
             .groups = "drop") %>%
   left_join(sweep_pars, by = "set_id") %>%
   mutate(pattern = case_when(
@@ -71,17 +72,21 @@ pattern_summary <- sweep %>%
 
 sweep_summary <- data.frame(
   measure = c("Mean engagement increases", "Between-agent SD increases", "Both increase",
+              "Median change in mean engagement",
+              "Median change in between-agent SD",
               "Median middle-to-late rank persistence",
               "Median replication SD, mean change",
               "Median replication SD, SD change",
               "Median replication SD, rank persistence"),
-  value = c(mean(sweep$delta_mean_mean > 0),
-            mean(sweep$sd_gain_mean > 0),
-            mean(sweep$delta_mean_mean > 0 & sweep$sd_gain_mean > 0),
-            median(sweep$rho_middle_late_mean),
-            median(sweep$delta_mean_rep_sd),
-            median(sweep$sd_gain_rep_sd),
-            median(sweep$rho_middle_late_rep_sd))
+  value = c(mean(sweep$delta_mean_mean > 0, na.rm = TRUE),
+            mean(sweep$sd_gain_mean > 0, na.rm = TRUE),
+            mean(sweep$delta_mean_mean > 0 & sweep$sd_gain_mean > 0, na.rm = TRUE),
+            median(sweep$delta_mean_mean, na.rm = TRUE),
+            median(sweep$sd_gain_mean, na.rm = TRUE),
+            median(sweep$rho_middle_late_mean, na.rm = TRUE),
+            median(sweep$delta_mean_rep_sd, na.rm = TRUE),
+            median(sweep$sd_gain_rep_sd, na.rm = TRUE),
+            median(sweep$rho_middle_late_rep_sd, na.rm = TRUE))
 )
 
 # Which parameters separate the 'both' cases from the rest?

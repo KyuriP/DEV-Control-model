@@ -2,7 +2,7 @@
 
 Code for Park & Munakata, *Individual Differences in Executive-Function Engagement Can Emerge Without Differences in Neurodevelopmental Capacity: A Developing Expected Value of Control Model* (in preparation for *Developmental Science*).
 
-The model simulates repeated decisions about whether to engage executive function (EF). Engaging EF depends on its learned expected payoff (V), its current effort cost (C), and temporary context (X). Engagement then updates V through experienced outcomes and lowers C through practice. All agents start identical and have no capacity differences.
+The model simulates repeated decisions about whether to engage executive function (EF). Engaging EF depends on its learned expected payoff (V), its current effort cost (C), and temporary context (X). Engagement then updates V through experienced outcomes and lowers C through practice. No simulation includes capacity differences. In the shared-environment simulations, agents also start with identical states, parameters, and environments.
 
 ## Running the code
 
@@ -14,7 +14,7 @@ From the project root:
 Rscript run_all.R
 ```
 
-This reproduces every number, table, and figure in the paper (about 10 minutes on a laptop). Each script in `analysis/` can also be run on its own from the project root.
+This reproduces all simulation results, Figures 2 to 7, the supplementary figures, and the values in the tables (about 10 minutes on a laptop). Figure 1 has its own render script in `figure1/`. Each script in `analysis/` can also be run on its own from the project root.
 
 ## Structure
 
@@ -40,7 +40,7 @@ archive/           earlier model versions and notebooks (not needed to reproduce
 ## Notes
 
 - Time in the model is a sequence of opportunities to engage EF, not literal days or years.
-- All main simulations use the same 20 seeds (`seeds` in `R/model.R`). Conditions that are compared directly (e.g., stress vs. reference) use the same seed, so they differ only in the manipulation. Numbers in the paper are medians over the 20 replications.
+- Simulations 1 to 5 use the same 20 seeds (`seeds` in `R/model.R`). Conditions that are compared directly (e.g., stress vs. reference) use the same seed, so they differ only in the manipulation. Numbers in the paper are medians over the 20 replications. Simulation 6 runs each parameter combination five times with its own seeds.
 - The first 1,500 steps of the long runs in Simulation 2, and the SD = 0 condition in Simulation 3, are identical to the Simulation 1 runs with the same seed.
 - Parameter values are provisional and were chosen so the dynamics are visible within 1,500 steps. Simulation 6 and the robustness checks (Figures S1, S3, and S4) show how much the results depend on them.
 
