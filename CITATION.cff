@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it as below."
+title: "DEV-Control: Developing Expected Value of Control model (simulation code)"
+authors:
+  - family-names: Park
+    given-names: Kyuri
+    affiliation: "Computational Science Lab, Informatics Institute, University of Amsterdam"
+  - family-names: Munakata
+    given-names: Yuko
+    affiliation: "Department of Psychology and Center for Mind and Brain, University of California, Davis"
+repository-code: "https://github.com/KyuriP/Yuko-EF-project"
+license: MIT

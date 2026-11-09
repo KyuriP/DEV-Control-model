@@ -47,3 +47,7 @@ archive/           earlier model versions and notebooks (not needed to reproduce
 ## Figure 1
 
 `figure1/render_figure1.sh` rebuilds the diagram from the Mermaid files. It needs `@mermaid-js/mermaid-cli` and `playwright` (see the comments in the script).
+
+## License
+
+The code is released under the MIT License (see `LICENSE`). To cite it, see `CITATION.cff`.
