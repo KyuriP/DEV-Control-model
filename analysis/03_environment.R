@@ -1,8 +1,8 @@
-# Simulation 4: do small, persistent differences in the reward environment
+# Simulation 3: do small, persistent differences in the reward environment
 # make individual differences more stable?
 # Each agent gets a fixed reward probability p_i ~ N(p, SD). SD = 0 is the
-# shared environment of Simulations 1 and 3 (same seeds, identical runs).
-# Output: Figure 5, results/sim4_*.csv
+# shared environment of Simulations 1 and 2 (same seeds, identical runs).
+# Output: Figure 4, results/sim3_*.csv
 
 library(dplyr)
 library(tidyr)
@@ -13,12 +13,12 @@ source("R/plot_style.R")
 
 sd_grid <- sort(unique(c(seq(0, 0.06, by = 0.003), 0.01, 0.02, 0.04)))
 
-sim4 <- expand.grid(sd_p = sd_grid, seed = seeds) %>%
+sim3 <- expand.grid(sd_p = sd_grid, seed = seeds) %>%
   rowwise() %>%
   mutate(dev_metrics(simulate_dev_control("value_cost", p_reward_sd = sd_p, seed = seed))) %>%
   ungroup()
 
-sim4_summary <- sim4 %>%
+sim3_summary <- sim3 %>%
   group_by(sd_p) %>%
   summarize(late_sd = median(late_sd),
             rho_median = median(rho_middle_late),
@@ -27,11 +27,11 @@ sim4_summary <- sim4 %>%
             .groups = "drop")
 
 dir.create("results", showWarnings = FALSE)
-write.csv(sim4, "results/sim4_environment_by_replication.csv", row.names = FALSE)
-write.csv(sim4_summary, "results/sim4_environment_summary.csv", row.names = FALSE)
+write.csv(sim3, "results/sim3_environment_by_replication.csv", row.names = FALSE)
+write.csv(sim3_summary, "results/sim3_environment_summary.csv", row.names = FALSE)
 
-# Figure 5 ------------------------------------------------------------------
-p_a <- ggplot(sim4_summary, aes(sd_p, rho_median)) +
+# Figure 4 ------------------------------------------------------------------
+p_a <- ggplot(sim3_summary, aes(sd_p, rho_median)) +
   geom_ribbon(aes(ymin = rho_q25, ymax = rho_q75), fill = COL$blue, alpha = 0.10) +
   geom_line(linewidth = 0.45, color = COL$blue) +
   geom_point(size = 1.2, color = COL$blue) +
@@ -72,9 +72,9 @@ p_b <- ggplot() +
   theme_pub(8.8) +
   theme(plot.margin = margin(6, 6, 5, 12))
 
-fig5 <- (p_a / p_b) + plot_layout(heights = c(0.75, 1.25)) +
+fig4 <- (p_a / p_b) + plot_layout(heights = c(0.75, 1.25)) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(face = "bold", size = 9.5),
         plot.tag.position = c(-0.02, 1.02))
 
-save_fig(fig5, "Figure5_persistent_environment", width = 6.8, height = 5.4)
+save_fig(fig4, "Figure4_persistent_environment", width = 6.8, height = 5.4)

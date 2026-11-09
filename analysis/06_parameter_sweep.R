@@ -1,7 +1,7 @@
-# Simulation 2: are the main patterns robust to parameter values?
+# Simulation 6: are the main patterns robust to parameter values?
 # 250 random parameter combinations x 5 replications, M2, shared environment.
 # Smaller populations (150 agents, 900 steps) to keep run time down.
-# Output: Figure 3, results/sim2_*.csv
+# Output: Figure 7, Table S1, results/sim6_*.csv
 
 library(dplyr)
 library(tidyr)
@@ -92,13 +92,13 @@ param_contrast <- sweep %>%
             .groups = "drop")
 
 dir.create("results", showWarnings = FALSE)
-write.csv(sweep_reps, "results/sim2_sweep_by_replication.csv", row.names = FALSE)
-write.csv(sweep, "results/sim2_sweep.csv", row.names = FALSE)
-write.csv(pattern_summary, "results/sim2_pattern_summary.csv", row.names = FALSE)
-write.csv(sweep_summary, "results/sim2_summary.csv", row.names = FALSE)
-write.csv(param_contrast, "results/sim2_parameter_contrast.csv", row.names = FALSE)
+write.csv(sweep_reps, "results/sim6_sweep_by_replication.csv", row.names = FALSE)
+write.csv(sweep, "results/sim6_sweep.csv", row.names = FALSE)
+write.csv(pattern_summary, "results/sim6_pattern_summary.csv", row.names = FALSE)
+write.csv(sweep_summary, "results/sim6_summary.csv", row.names = FALSE)
+write.csv(param_contrast, "results/sim6_parameter_contrast.csv", row.names = FALSE)
 
-# Figure 3 ------------------------------------------------------------------
+# Figure 7 ------------------------------------------------------------------
 pattern_cols <- c(
   "Improvement + differentiation" = COL$orange,
   "Improvement only"              = COL$blue,
@@ -114,7 +114,7 @@ y_lim <- c(min(sweep$sd_gain_mean, -0.02), max(sweep$sd_gain_mean) * 1.05)
 x_in <- function(f) x_lim[1] + f * diff(x_lim)
 y_in <- function(f) y_lim[1] + f * diff(y_lim)
 
-fig3 <- ggplot(sweep, aes(delta_mean_mean, sd_gain_mean,
+fig7 <- ggplot(sweep, aes(delta_mean_mean, sd_gain_mean,
                           color = factor(pattern, levels = pattern_levels))) +
   geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3, color = COL$gray) +
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.3, color = COL$gray) +
@@ -133,4 +133,4 @@ fig3 <- ggplot(sweep, aes(delta_mean_mean, sd_gain_mean,
        y = "Change in between-agent SD (late - early)") +
   theme_pub()
 
-save_fig(fig3, "Figure3_parameter_robustness", width = 6.2, height = 4.6)
+save_fig(fig7, "Figure7_parameter_robustness", width = 6.2, height = 4.6)

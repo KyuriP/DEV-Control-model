@@ -2,7 +2,7 @@
 # developmental periods are placed?
 # Same runs as Simulation 1 (3 models x 20 seeds), summarized with five
 # different sets of early / middle / late windows (fractions of the run).
-# Output: Figure S2, results/robustness_windows_*.csv
+# Output: Figure S1, results/robustness_windows_*.csv
 
 library(dplyr)
 library(tidyr)
@@ -42,7 +42,7 @@ dir.create("results", showWarnings = FALSE)
 write.csv(win, "results/robustness_windows_by_replication.csv", row.names = FALSE)
 write.csv(win_summary, "results/robustness_windows_summary.csv", row.names = FALSE)
 
-# Figure S2 -----------------------------------------------------------------
+# Figure S1 -----------------------------------------------------------------
 long <- win %>%
   filter(model_label != model_labels[["evc"]]) %>%
   pivot_longer(c(delta_mean, sd_gain, rho_middle_late), names_to = "measure") %>%
@@ -55,7 +55,7 @@ long <- win %>%
                                               "Middle-to-late rank persistence")),
          windows = factor(windows, levels = rev(names(window_sets))))
 
-fig_s2 <- ggplot(long, aes(value, windows, color = model_label)) +
+fig_s1 <- ggplot(long, aes(value, windows, color = model_label)) +
   geom_vline(xintercept = 0, linewidth = 0.25, color = COL$light_gray) +
   geom_boxplot(outlier.size = 0.4, linewidth = 0.3, width = 0.6,
                position = position_dodge(width = 0.7)) +
@@ -64,4 +64,4 @@ fig_s2 <- ggplot(long, aes(value, windows, color = model_label)) +
   labs(x = NULL, y = NULL) +
   theme_pub(8.5)
 
-save_fig(fig_s2, "FigureS2_window_robustness", width = 7.4, height = 3.4)
+save_fig(fig_s1, "FigureS1_window_robustness", width = 7.4, height = 3.4)

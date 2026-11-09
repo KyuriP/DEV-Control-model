@@ -1,10 +1,10 @@
-# Simulation 5: temporary contextual demands (stress).
+# Simulation 4: temporary contextual demands (stress).
 # A temporary increase in the contextual cost X, compared with a reference run
 # with the same seed. X only enters the momentary decision; it does not change
 # V or C directly.
 # Main condition: half-sine pulse, steps 825-878 (55%-58.5% of the run), peak .20.
 # Robustness: pulse peak, duration, and onset.
-# Output: Figure 6, Figure S3, results/sim5_*.csv
+# Output: Figure 5, Figure S3, results/sim4_*.csv
 
 library(dplyr)
 library(tidyr)
@@ -51,11 +51,11 @@ grid <- bind_rows(
               duration = main_duration, peak = main_peak)
 )
 
-sim5 <- bind_rows(lapply(seq_len(nrow(grid)), function(g) {
+sim4 <- bind_rows(lapply(seq_len(nrow(grid)), function(g) {
   stress_effects(grid$start[g], grid$duration[g], grid$peak[g])
 }))
 
-sim5_summary <- sim5 %>%
+sim4_summary <- sim4 %>%
   group_by(start, duration, peak) %>%
   summarize(across(c(max_drop, lag_effect, late_effect),
                    list(median = median,
@@ -65,10 +65,10 @@ sim5_summary <- sim5 %>%
   mutate(main = start == main_start & duration == main_duration & peak == main_peak)
 
 dir.create("results", showWarnings = FALSE)
-write.csv(sim5, "results/sim5_stress_by_replication.csv", row.names = FALSE)
-write.csv(sim5_summary, "results/sim5_stress_summary.csv", row.names = FALSE)
+write.csv(sim4, "results/sim4_stress_by_replication.csv", row.names = FALSE)
+write.csv(sim4_summary, "results/sim4_stress_summary.csv", row.names = FALSE)
 
-# Figure 6 ------------------------------------------------------------------
+# Figure 5 ------------------------------------------------------------------
 main_end <- main_start + main_duration - 1
 x_main <- sine_pulse(T, main_start, main_duration, main_peak)
 
@@ -92,36 +92,38 @@ p_a <- ggplot() +
   geom_line(data = traj, aes(step, pi, group = interaction(condition, agent), color = condition),
             linewidth = 0.14, alpha = 0.13) +
   geom_line(data = means, aes(step, mean_pi, color = condition), linewidth = 0.52) +
+  annotate("segment", x = main_start, xend = main_end, y = 0.92, yend = 0.92,
+           color = COL$orange, linewidth = 1) +
+  annotate("text", x = (main_start + main_end) / 2, y = 0.97, label = "Temporary stress",
+           color = COL$orange, size = 3) +
   scale_color_manual(values = cond_cols) +
   step_axis +
   coord_cartesian(ylim = c(0, 1)) +
   labs(x = "Simulation step", y = "EF engagement propensity") +
   theme_pub(8.9)
 
-# B: difference from reference across all 20 replications.
-diff_curves <- bind_rows(lapply(seq_along(seeds), function(i) {
-  sim <- simulate_dev_control("value_cost", extra_cost = x_main, seed = seeds[i])
-  data.frame(seed = seeds[i], step = sim$steps, diff = mean_curve(sim) - mean_curve(ref[[i]]))
-})) %>%
-  group_by(step) %>%
-  summarize(median = median(diff), q25 = quantile(diff, 0.25), q75 = quantile(diff, 0.75),
-            .groups = "drop")
+# B: zoom on the period after the stress, same replication and agents.
+zoom <- c(1000, 1300)
+zoom_traj <- filter(traj, step >= zoom[1], step <= zoom[2])
+zoom_means <- filter(means, step >= zoom[1], step <= zoom[2])
 
-p_b <- ggplot(filter(diff_curves, step >= main_start - 100), aes(step, median)) +
-  annotate("rect", xmin = main_start, xmax = main_end, ymin = -Inf, ymax = Inf,
-           fill = COL$orange, alpha = 0.08) +
-  geom_hline(yintercept = 0, linewidth = 0.25, color = COL$gray) +
-  geom_ribbon(aes(ymin = q25, ymax = q75), fill = COL$orange, alpha = 0.2) +
-  geom_line(linewidth = 0.45, color = COL$orange) +
-  labs(x = "Simulation step", y = "Stress minus reference") +
-  theme_pub(8.9)
+p_b <- ggplot() +
+  geom_line(data = zoom_traj, aes(step, pi, group = interaction(condition, agent), color = condition),
+            linewidth = 0.18, alpha = 0.45) +
+  geom_line(data = zoom_means, aes(step, mean_pi, color = condition), linewidth = 0.6) +
+  scale_color_manual(values = cond_cols) +
+  scale_x_continuous(breaks = seq(zoom[1], zoom[2], 100)) +
+  coord_cartesian(xlim = zoom, ylim = range(zoom_means$mean_pi) + c(-0.04, 0.04)) +
+  labs(x = "Simulation step", y = "EF engagement propensity") +
+  theme_pub(8.9) +
+  theme(legend.position = "none")
 
-fig6 <- (p_a / p_b) + plot_layout(heights = c(1.3, 1)) +
+fig5 <- (p_a / p_b) + plot_layout(heights = c(1.15, 1)) +
   plot_annotation(tag_levels = "A") & panel_tags
-save_fig(fig6, "Figure6_temporary_stress", width = 6.7, height = 5.6)
+save_fig(fig5, "Figure5_temporary_stress", width = 6.7, height = 5.6)
 
 # Figure S3: robustness -----------------------------------------------------
-dose <- filter(sim5_summary, start == main_start) %>%
+dose <- filter(sim4_summary, start == main_start) %>%
   mutate(duration = factor(paste(duration, "steps"),
                            levels = paste(sort(unique(duration)), "steps")))
 
@@ -134,7 +136,7 @@ p_s3a <- ggplot(dose, aes(peak, lag_effect_median, color = duration)) +
   labs(x = "Peak contextual cost", y = "Remaining difference\n225 steps after stress") +
   theme_pub(8.8)
 
-onset <- filter(sim5_summary, duration == main_duration, peak == main_peak)
+onset <- filter(sim4_summary, duration == main_duration, peak == main_peak)
 
 p_s3b <- ggplot(onset, aes(start, lag_effect_median)) +
   geom_hline(yintercept = 0, linewidth = 0.25, color = COL$gray) +

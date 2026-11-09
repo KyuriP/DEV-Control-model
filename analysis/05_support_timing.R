@@ -1,11 +1,11 @@
-# Simulation 6: does the same supportive experience matter more when it comes earlier?
+# Simulation 5: does the same supportive experience matter more when it comes earlier?
 # Support = temporary increase in the probability that engagement pays off,
 # compared with a reference run with the same seed.
 # Main conditions: half-sine pulse lasting 195 steps (13% of the run), peak +.12,
 # starting at step 300 (early) or 900 (later). Effects are measured the same
 # number of steps after each pulse ends.
 # Robustness: pulse onset, size, duration, and follow-up lag.
-# Output: Figure 7, Figure S4, results/sim6_*.csv
+# Output: Figure 6, Figure S4, results/sim5_*.csv
 
 library(dplyr)
 library(tidyr)
@@ -53,11 +53,11 @@ grid <- bind_rows(
 ) %>%
   distinct()
 
-sim6 <- bind_rows(lapply(seq_len(nrow(grid)), function(g) {
+sim5 <- bind_rows(lapply(seq_len(nrow(grid)), function(g) {
   support_effects(grid$start[g], grid$duration[g], grid$boost[g])
 }))
 
-sim6_summary <- sim6 %>%
+sim5_summary <- sim5 %>%
   group_by(start, end, duration, boost, lag) %>%
   summarize(effect_median = median(effect),
             effect_q25 = quantile(effect, 0.25),
@@ -65,10 +65,10 @@ sim6_summary <- sim6 %>%
             .groups = "drop")
 
 dir.create("results", showWarnings = FALSE)
-write.csv(sim6, "results/sim6_support_by_replication.csv", row.names = FALSE)
-write.csv(sim6_summary, "results/sim6_support_summary.csv", row.names = FALSE)
+write.csv(sim5, "results/sim5_support_by_replication.csv", row.names = FALSE)
+write.csv(sim5_summary, "results/sim5_support_summary.csv", row.names = FALSE)
 
-# Figure 7 ------------------------------------------------------------------
+# Figure 6 ------------------------------------------------------------------
 early_end <- early_start + main_duration - 1
 later_end <- later_start + main_duration - 1
 sup_cols <- c("Reference" = COL$dark_gray, "Early support" = COL$orange,
@@ -98,6 +98,14 @@ p_a <- ggplot() +
   geom_line(data = traj, aes(step, pi, group = interaction(condition, agent), color = condition),
             linewidth = 0.14, alpha = 0.14) +
   geom_line(data = means, aes(step, mean_pi, color = condition), linewidth = 0.5) +
+  annotate("segment", x = early_start, xend = early_end, y = 0.92, yend = 0.92,
+           color = COL$orange, linewidth = 1) +
+  annotate("text", x = (early_start + early_end) / 2, y = 0.97, label = "Early support",
+           color = COL$orange, size = 3) +
+  annotate("segment", x = later_start, xend = later_end, y = 0.92, yend = 0.92,
+           color = COL$blue, linewidth = 1) +
+  annotate("text", x = (later_start + later_end) / 2, y = 0.97, label = "Later support",
+           color = COL$blue, size = 3) +
   scale_color_manual(values = sup_cols, breaks = names(sup_cols)) +
   step_axis +
   coord_cartesian(ylim = c(0, 1)) +
@@ -132,7 +140,7 @@ p_b <- ggplot(aligned, aes(since_end, median, color = condition, fill = conditio
   theme(legend.position = "none")
 
 # C: effect at the same follow-up lag, for every onset.
-onset <- filter(sim6_summary, duration == main_duration, boost == main_boost, lag == main_lag)
+onset <- filter(sim5_summary, duration == main_duration, boost == main_boost, lag == main_lag)
 
 p_c <- ggplot(onset, aes(start, effect_median)) +
   geom_hline(yintercept = 0, linewidth = 0.25, color = COL$gray) +
@@ -147,12 +155,12 @@ p_c <- ggplot(onset, aes(start, effect_median)) +
   theme_pub(8.9) +
   theme(legend.position = "none")
 
-fig7 <- (p_a / (p_b | p_c)) + plot_layout(heights = c(1.3, 1)) +
+fig6 <- (p_a / (p_b | p_c)) + plot_layout(heights = c(1.3, 1)) +
   plot_annotation(tag_levels = "A") & panel_tags
-save_fig(fig7, "Figure7_support_timing", width = 7.1, height = 6)
+save_fig(fig6, "Figure6_support_timing", width = 7.1, height = 6)
 
 # Figure S4: size, duration, and follow-up lag ------------------------------
-size_dur <- filter(sim6_summary, start %in% round(c(0.20, 0.50) * T), lag == main_lag) %>%
+size_dur <- filter(sim5_summary, start %in% round(c(0.20, 0.50) * T), lag == main_lag) %>%
   mutate(onset = paste("Onset at step", start),
          duration = factor(paste(duration, "steps"),
                            levels = paste(sort(unique(duration)), "steps")))
@@ -169,7 +177,7 @@ p_s4a <- ggplot(size_dur, aes(boost, effect_median, color = duration)) +
   theme_pub(8.8) +
   theme(panel.spacing = grid::unit(1.5, "lines"))
 
-lag_df <- filter(sim6_summary, start %in% c(early_start, later_start),
+lag_df <- filter(sim5_summary, start %in% c(early_start, later_start),
                  duration == main_duration, boost == main_boost) %>%
   mutate(condition = if_else(start == early_start, "Early support", "Later support"))
 

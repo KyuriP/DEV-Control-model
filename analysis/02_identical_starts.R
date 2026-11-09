@@ -1,8 +1,8 @@
-# Simulation 3: do individual differences emerge from identical starts, and do
+# Simulation 2: do individual differences emerge from identical starts, and do
 # they persist? Full model (M2), shared environment.
 # The first 1,500 steps of each long run are identical to the Simulation 1 run
 # with the same seed (same random stream), so the numbers line up across sections.
-# Output: Figure 4, Figure S1, results/sim3_*.csv
+# Output: Figure 3, Figure S2, results/sim2_*.csv
 
 library(dplyr)
 library(tidyr)
@@ -12,7 +12,7 @@ source("R/metrics.R")
 source("R/plot_style.R")
 
 T_main <- default_pars$T
-T_long <- 4 * (T_main - 1) + 1   # four times longer
+T_long <- 4 * T_main   # four times longer (6,000 steps)
 
 long_runs <- lapply(seeds, function(s) {
   simulate_dev_control("value_cost", T = T_long, record_every = 5, seed = s)
@@ -30,14 +30,14 @@ first_part <- function(sim, T_end = T_main) {
 main_runs <- lapply(long_runs, first_part)
 
 # Rank persistence within the main simulation --------------------------------
-sim3_ranks <- bind_rows(lapply(seq_along(seeds), function(i) {
+sim2_ranks <- bind_rows(lapply(seq_along(seeds), function(i) {
   cbind(seed = seeds[i], dev_metrics(main_runs[[i]]))
 }))
 
 # Rank memory over the long run: correlation between each agent's late-window
 # score (85-95% of the main run) and its score in later windows.
 late_window <- c(step_at(T_main, 0.85), step_at(T_main, 0.95))
-centers <- round(seq(1.10, 4.00, by = 0.20) * (T_main - 1)) + 1
+centers <- round(seq(1.10, 3.90, by = 0.20) * (T_main - 1)) + 1
 half_width <- round(0.06 * (T_main - 1))
 
 rank_memory <- bind_rows(lapply(seq_along(seeds), function(i) {
@@ -58,14 +58,14 @@ rank_memory_summary <- rank_memory %>%
             .groups = "drop")
 
 dir.create("results", showWarnings = FALSE)
-write.csv(sim3_ranks, "results/sim3_rank_persistence_by_replication.csv", row.names = FALSE)
-write.csv(rank_memory, "results/sim3_rank_memory_by_replication.csv", row.names = FALSE)
-write.csv(rank_memory_summary, "results/sim3_rank_memory_summary.csv", row.names = FALSE)
+write.csv(sim2_ranks, "results/sim2_rank_persistence_by_replication.csv", row.names = FALSE)
+write.csv(rank_memory, "results/sim2_rank_memory_by_replication.csv", row.names = FALSE)
+write.csv(rank_memory_summary, "results/sim2_rank_memory_summary.csv", row.names = FALSE)
 
-# Figure 4 ------------------------------------------------------------------
+# Figure 3 ------------------------------------------------------------------
 # Panels A-C show the run whose middle-to-late correlation is closest to the
 # median over the 20 replications, so the example is typical.
-rep_idx <- which.min(abs(sim3_ranks$rho_middle_late - median(sim3_ranks$rho_middle_late)))
+rep_idx <- which.min(abs(sim2_ranks$rho_middle_late - median(sim2_ranks$rho_middle_late)))
 run1 <- main_runs[[rep_idx]]
 
 set.seed(seeds[rep_idx])
@@ -117,16 +117,16 @@ p_d <- ggplot(rank_memory_summary, aes(step, median_rho)) +
   labs(x = "Simulation step", y = "Correlation with rank at step 1,500") +
   theme_pub(8.8)
 
-fig4 <- ((p_a | p_b) / (p_c | p_d)) + plot_annotation(tag_levels = "A") & panel_tags
-save_fig(fig4, "Figure4_identical_starts", width = 7.1, height = 6.4)
+fig3 <- ((p_a | p_b) / (p_c | p_d)) + plot_annotation(tag_levels = "A") & panel_tags
+save_fig(fig3, "Figure3_identical_starts", width = 7.1, height = 6.4)
 
-# Figure S1: between-agent SD over the long run (first replication) ----------
+# Figure S2: between-agent SD over the long run (first replication) ----------
 long1 <- long_runs[[1]]
-fig_s1 <- ggplot(data.frame(step = long1$steps, sd_pi = apply(long1$pi, 2, sd)),
+fig_s2 <- ggplot(data.frame(step = long1$steps, sd_pi = apply(long1$pi, 2, sd)),
                  aes(step, sd_pi)) +
   geom_line(linewidth = 0.3, color = COL$ink) +
   geom_vline(xintercept = T_main, linetype = "dashed", linewidth = 0.3, color = COL$gray) +
   labs(x = "Simulation step", y = "Between-agent SD") +
   theme_pub()
 
-save_fig(fig_s1, "FigureS1_long_run_sd", width = 6.1, height = 3.4)
+save_fig(fig_s2, "FigureS2_long_run_sd", width = 6.1, height = 3.4)
