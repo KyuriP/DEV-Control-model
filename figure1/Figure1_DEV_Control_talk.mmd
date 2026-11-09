@@ -1,7 +1,6 @@
 flowchart LR
-%% Figure 1 — arranged per Yuko's sketch (Nov 2026): context far left; effort cost above, learned payoff below;
-%% net value -> EF engagement -> experienced outcome along the middle; reward environment above the outcome;
-%% practice loop back to C (top), learning loop back to V (bottom).
+%% Layout follows Yuko's sketch (Nov 2026): context on the left, cost above, payoff below,
+%% net value -> engagement -> outcome in the middle, practice loop to C (top), learning loop to V (bottom).
 
 classDef fast fill:#E8F4FF,stroke:#1E6FB9,stroke-width:2.4px,color:#0B2A3D;
 classDef slow fill:#FFF2CC,stroke:#B07D00,stroke-width:2.4px,color:#3D2B00;
@@ -21,7 +20,7 @@ A(["<b>EF engagement</b><br/>A(t): engage or not"]):::fast
 
 R(["Experienced<br/>outcome"]):::outcome
 
-%% invisible links: keep context in the leftmost column
+%% invisible links keep context in the left column
 X ~~~ C
 X ~~~ V
 
@@ -32,8 +31,7 @@ U --> A
 A -->|creates experience| R
 ENV -->|shapes payoff| R
 
-%% Feedback loops back to the left. Written as two-headed links so the layout keeps
-%% C and V on the left; the extra arrowhead is hidden by the linkStyle below.
+%% Feedback links are two-headed so C and V stay on the left; the extra arrowhead is hidden below.
 C <-->|practice makes future<br/>engagement easier| A
 V <-->|learn whether EF pays off| R
 linkStyle 8,9 marker-end:none;

@@ -1,6 +1,5 @@
-// Post-process a Mermaid SVG: replace Mermaid's small (and sometimes crooked) arrowhead markers
-// with larger arrowheads aligned to the final stretch of each edge, then export SVG / PDF / PNG.
-// usage: node fix_arrows.js <in.svg> <out_basename> <arrowLength_px> <arrowWidth_px>
+// Replace Mermaid's small arrowheads with bigger ones, then save SVG / PDF / PNG.
+// usage: node fix_arrows.js <in.svg> <out_basename> <arrow_length_px> <arrow_width_px>
 const { chromium } = require(process.env.PW || "playwright");
 const fs = require("fs");
 const [inSvg, outBase, L = "16", W = "12"] = process.argv.slice(2);
@@ -24,7 +23,7 @@ const [inSvg, outBase, L = "16", W = "12"] = process.argv.slice(2);
       if (hasStart) heads.push([p.getPointAtLength(back), p.getPointAtLength(0)]);
       for (const [from, end] of heads) {
         let dx = end.x - from.x, dy = end.y - from.y; const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
-        // Mermaid ends the line a few px short of the node; put the tip where Mermaid's marker tip was.
+        // Mermaid stops the line a few px before the node
         const tip = { x: end.x + dx * 4, y: end.y + dy * 4 };
         const base = { x: tip.x - dx * L, y: tip.y - dy * L };
         const px = -dy * W / 2, py = dx * W / 2;
@@ -33,14 +32,13 @@ const [inSvg, outBase, L = "16", W = "12"] = process.argv.slice(2);
         tri.setAttribute("fill", "#6B7780"); tri.setAttribute("stroke", "none");
         tri.setAttribute("transform", p.getAttribute("transform") || "");
         p.parentNode.appendChild(tri);
-        // shorten the visible line so it doesn't poke through the arrowhead
       }
     }
     return svg.outerHTML;
   }, [Number(L), Number(W)]);
   const out = fixed;
   fs.writeFileSync(outBase + ".svg", out);
-  // render PDF + PNG from the fixed SVG
+
   await page.setContent(`<html><body style="margin:0;background:#fff">${out}</body></html>`);
   const box = await page.evaluate(() => { const r = document.querySelector("svg").getBoundingClientRect(); return { w: Math.ceil(r.width), h: Math.ceil(r.height) }; });
   await page.pdf({ path: outBase + ".pdf", width: box.w + "px", height: box.h + "px", printBackground: true, pageRanges: "1" });
