@@ -102,25 +102,32 @@ p_a <- ggplot() +
   labs(x = "Simulation step", y = "EF engagement propensity") +
   theme_pub(8.9)
 
-# B: zoom on the period after the stress, same replication and agents.
+# Inset: zoom on the period after the stress, same replication and agents.
 zoom <- c(1000, 1300)
 zoom_traj <- filter(traj, step >= zoom[1], step <= zoom[2])
 zoom_means <- filter(means, step >= zoom[1], step <= zoom[2])
+zoom_y <- range(zoom_means$mean_pi) + c(-0.04, 0.04)
 
-p_b <- ggplot() +
+p_inset <- ggplot() +
   geom_line(data = zoom_traj, aes(step, pi, group = interaction(condition, agent), color = condition),
-            linewidth = 0.18, alpha = 0.45) +
-  geom_line(data = zoom_means, aes(step, mean_pi, color = condition), linewidth = 0.6) +
+            linewidth = 0.15, alpha = 0.35) +
+  geom_line(data = zoom_means, aes(step, mean_pi, color = condition), linewidth = 0.55) +
   scale_color_manual(values = cond_cols) +
   scale_x_continuous(breaks = seq(zoom[1], zoom[2], 100)) +
-  coord_cartesian(xlim = zoom, ylim = range(zoom_means$mean_pi) + c(-0.04, 0.04)) +
-  labs(x = "Simulation step", y = "EF engagement propensity") +
-  theme_pub(8.9) +
-  theme(legend.position = "none")
+  coord_cartesian(xlim = zoom, ylim = zoom_y, expand = FALSE) +
+  labs(x = NULL, y = NULL) +
+  theme_pub(7) +
+  theme(legend.position = "none",
+        panel.border = element_rect(color = COL$gray, fill = NA, linewidth = 0.4),
+        plot.background = element_rect(fill = "white", color = NA))
 
-fig5 <- (p_a / p_b) + plot_layout(heights = c(1.15, 1)) +
-  plot_annotation(tag_levels = "A") & panel_tags
-save_fig(fig5, "Figure5_temporary_stress", width = 6.7, height = 5.6)
+# mark the zoomed region in the main panel
+p_a <- p_a +
+  annotate("rect", xmin = zoom[1], xmax = zoom[2], ymin = zoom_y[1], ymax = zoom_y[2],
+           fill = NA, color = COL$gray, linetype = "dashed", linewidth = 0.3)
+
+fig5 <- p_a + inset_element(p_inset, left = 0.03, bottom = 0.47, right = 0.47, top = 0.97)
+save_fig(fig5, "Figure5_temporary_stress", width = 6.7, height = 3.9)
 
 # Figure S3: robustness -----------------------------------------------------
 dose <- filter(sim4_summary, start == main_start) %>%
